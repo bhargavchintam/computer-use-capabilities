@@ -76,6 +76,7 @@ class BankState:
         self.sessions: dict[str, OperatorSession] = {}
         self.failed_signons: dict[str, int] = {}
         self.receipts: list[dict[str, Any]] = []
+        self.posts: list[str] = []  # every form submission, in order (tests prove "sent once")
         self.next_share_seq = 51
         self.faults.clear()
 
@@ -196,7 +197,13 @@ def create_app(
                 state.sessions.pop(request.cookies.get(SESSION_COOKIE, ""), None)  # session times out now
             if state.faults.take("error500", path):
                 return render("error500.html", status=500, request_id=secrets.token_hex(8))
+            if request.method == "POST":
+                state.posts.append(path)
         response: Response = await call_next(request)
+        if not path.startswith(("/__admin", "/static")):
+            late = state.faults.take("slow_response", path)
+            if late:  # the work is done (a commit has happened); only the answer is late
+                await asyncio.sleep(late.delay_ms / 1000)
         response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -486,6 +493,7 @@ def create_app(
                     for n, m in state.members.items()
                 },
                 "receipts": state.receipts,
+                "posts": state.posts,
                 "faults": state.faults.describe(),
                 "sessions": len(state.sessions),
             }

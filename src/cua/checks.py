@@ -10,11 +10,21 @@ from .models import Target, condition_kind
 from .models.capability import InputSpec
 from .models.common import LiteralValue, ParamRef, SecretRef
 from .models.targets import TableCell
-from .surface.web import WebSurface
+from .surface.base import Surface
 
 
 def _norm(s: str | None) -> str:
     return re.sub(r"\s+", " ", s or "").strip().lower()
+
+
+def contains_value(haystack: str, value: str) -> bool:
+    """Whole-token containment: "250.00" is not inside "$1,250.00", "10042" not inside "100421",
+    "Gift fund" not inside "Gift funds". A leading currency sign is allowed."""
+    v = _norm(value)
+    if not v:
+        return False
+    pattern = rf"(?<![\w.,]){re.escape(v)}(?![\w]|[.,]\d)"
+    return re.search(pattern, _norm(haystack)) is not None
 
 
 def money_variants(value: str) -> list[str]:
@@ -39,7 +49,7 @@ def strategy_dicts(target: Target, params: dict[str, str]) -> list[dict[str, Any
 class Checks:
     def __init__(
         self,
-        surface: WebSurface,
+        surface: Surface,
         *,
         params: dict[str, str] | None = None,
         input_specs: dict[str, InputSpec] | None = None,
@@ -97,8 +107,7 @@ class Checks:
             text = await self.surface.page_text(args.container)
             if text is None:
                 return False
-            hay = _norm(text)
-            return any(_norm(v) in hay for v in self.text_variants(args.text))
+            return any(contains_value(text, v) for v in self.text_variants(args.text))
         if kind == "text_matches":
             text = await self.surface.page_text(args.container)
             return text is not None and re.search(args.pattern, text) is not None
@@ -120,7 +129,12 @@ class Checks:
             if res is None:
                 return False
             actual = _norm(await self.surface.read_text(res.element))
-            return actual in {_norm(v) for v in money_variants(self.resolve_value(args.equals))}
+            expected = self.resolve_value(args.equals)
+            ref = args.equals
+            spec = self.input_specs.get(ref.param) if isinstance(ref, ParamRef) else None
+            if spec is not None and spec.type == "money":
+                return _same_amount(actual, expected)
+            return actual == _norm(expected)
         raise ValueError(f"unknown condition kind {kind}")
 
     async def snippet(self, pattern: str, container: list[str]) -> str | None:
@@ -148,3 +162,16 @@ class Checks:
             else:
                 parts.append(re.escape(seg))
         return re.compile("^/" + "/".join(parts) + "/?$")
+
+
+def _same_amount(shown: str, value: str) -> bool:
+    """Money compared as numbers: "$1,250.00" equals "1250", never "250.00"."""
+    m = re.search(r"-?\$?\s?[\d,]*\d(?:\.\d+)?", shown)
+    if not m:
+        return False
+    try:
+        a = Decimal(re.sub(r"[^\d.\-]", "", m.group()))
+        b = Decimal(value.replace("$", "").replace(",", "").strip())
+    except InvalidOperation:
+        return False
+    return a == b

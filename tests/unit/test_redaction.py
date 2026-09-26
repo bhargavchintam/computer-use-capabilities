@@ -64,3 +64,41 @@ def test_outputs_in_logs_are_digests() -> None:
     logged = r.output_for_log({"amount": "12450.31", "currency": "USD"}, "confidential")
     assert logged["redacted"] == "confidential" and "12450" not in str(logged)
     assert r.output_for_log("CN7K2Q9D4X", "internal") == "CN7K2Q9D4X"
+
+
+def test_output_digests_are_keyed() -> None:
+    """A plain hash of a balance can be reversed by trying amounts; a keyed one cannot."""
+    import hashlib
+    import json
+
+    from cua.redaction import digest
+
+    value = {"amount": "12450.31", "currency": "USD"}
+    plain = hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:12]
+    assert digest(value) != plain
+    assert digest(value) == digest(dict(value))  # stable within a run, so runs can be compared
+
+
+def test_a_sensitive_column_header_masks_its_cells() -> None:
+    from cua.observation import render
+    from cua.surface.base import FrameSnapshot, PageSnapshot
+
+    table = {
+        "t": "table",
+        "ref": "e1",
+        "headers": ["Member #", "Name", "Status"],
+        "rows": [
+            [
+                {"ref": "e2", "text": "10043"},
+                {"ref": "e3", "text": "PRATT, PETER"},
+                {"ref": "e4", "text": "Active"},
+            ]
+        ],
+        "total_rows": 1,
+    }
+    snap = PageSnapshot([FrameSnapshot(["frame:work"], "/core/inquiry", "", "d1", False, [table])])
+    r = Redactor(["Name"])
+    for for_model in (True, False):
+        out = render(snap, r, for_model=for_model)
+        assert "PRATT" not in out and "<pii:name>" in out and "Active" in out
+    assert "PRATT, PETER" in r.masked_values  # remembered (in memory) so the linter can refuse it

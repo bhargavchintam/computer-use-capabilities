@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,7 @@ async def test_happy_path_is_deterministic(bank: Bank, balance_cap: Capability, 
     assert first.outputs["savings_balance"] == {"amount": "12450.31", "currency": "USD"}
     assert [r["share_id"] for r in first.outputs["shares"]] == ["S01", "S10", "S50"]
     assert all(s.strategy and s.strategy.endswith("#0") for s in first.steps), "primary strategies only"
-    assert first.trace_sha256 == second.trace_sha256
+    assert first.path_sha256 == second.path_sha256
     assert first.outputs == second.outputs
 
 
@@ -113,14 +114,14 @@ async def test_transient_server_error_is_recovered(
     assert r.status == "succeeded" and [x.detector for x in r.recoveries] == ["server_error"]
 
 
-async def test_persistent_server_error_is_a_retryable_hard_failure(
+async def test_persistent_server_error_is_a_transient_hard_failure(
     bank: Bank, balance_cap: Capability, tmp_path: Path
 ) -> None:
     bank.fault("pinecrest", "error500", path="/core/inquiry", count=10)
     r = await run_replay(
         balance_cap, tenant_id="pinecrest", inputs={"member_number": "10042"}, runs_root=tmp_path
     )
-    assert r.status == "failed" and r.error and r.error.code == "APP_ERROR" and r.error.retryable
+    assert r.status == "failed" and r.error and r.error.code == "APP_ERROR" and r.error.transient
     assert len(r.recoveries) == 2  # bounded
     assert r.side_effect == "none"
 
@@ -192,3 +193,89 @@ async def test_results_on_disk_never_contain_raw_outputs(
     blob = "".join(p.read_text() for p in run_dir.rglob("*") if p.suffix in (".json", ".jsonl", ".txt"))
     for secret in ("12450.31", "12,450.31", "10042", "HARTWELL", "900-12-4417", "4417"):
         assert secret not in blob, secret
+
+
+async def test_a_missing_keyed_row_is_an_answer_not_drift(
+    bank: Bank, balance_cap: Capability, tmp_path: Path
+) -> None:
+    """Member 10091 has checking only: "what is the savings balance?" has a legitimate answer."""
+    r = await run_replay(
+        balance_cap, tenant_id="pinecrest", inputs={"member_number": "10091"}, runs_root=tmp_path
+    )
+    assert r.status == "business_outcome" and r.outcome and r.outcome.code == "OUTPUT_NOT_PRESENT"
+    assert r.outcome.message and "PRIMARY SAVINGS" in r.outcome.message
+    assert r.error is None and r.side_effect == "none"
+    assert (r.duration_ms or 0) < 9000, "decided as soon as the table was on the page, not after a timeout"
+
+
+async def test_a_vendor_upgrade_the_config_missed_stops_before_anything_happens(
+    bank: Bank, balance_cap: Capability, tmp_path: Path
+) -> None:
+    """The tenant config says 7.3 (which selects the 7.3 overlay) but the app reports 7.2.4: the
+    plan the app needs differs from the configured one, so nothing runs."""
+    r = await run_replay(
+        approved(balance_cap),
+        tenant_id="pinecrest",
+        inputs={"member_number": "10042"},
+        runs_root=tmp_path,
+        tenant_overrides={"product_version": "7.3.1"},
+    )
+    assert r.status == "failed" and r.error and r.error.code == "INCOMPATIBLE_VERSION"
+    assert "7.2.4" in r.error.message and r.side_effect == "none"
+    assert all(s.status == "not_run" for s in r.steps)
+
+
+async def test_an_unapproved_overlay_cannot_run_on_production(
+    bank: Bank, balance_cap: Capability, tmp_path: Path
+) -> None:
+    from cua.configio import load_overlays
+
+    draft = [o.model_copy(update={"status": "draft", "approval": None}) for o in load_overlays()]
+    r = await run_replay(
+        approved(balance_cap),
+        tenant_id="lakeside",
+        inputs={"member_number": "20031"},
+        runs_root=tmp_path,
+        overlays=draft,
+    )
+    assert r.status == "rejected" and r.error and r.error.code == "NOT_APPROVED"
+    assert "overlay acmecore-7.3" in r.error.message
+
+
+async def test_an_unrecoverable_condition_goes_to_a_person_before_failing(
+    bank: Bank, balance_cap: Capability, tmp_path: Path
+) -> None:
+    """An unknown pop-up is never guessed at. With an operator connected, a person looks at the live
+    session first; they judge it harmless and hand back, and replay re-checks and carries on."""
+    from cua.control import ControlState, SessionController
+    from cua.runtime import RuntimeSession
+
+    bank.fault(
+        "pinecrest", "alert", path="/core/inquiry", message="Posting batch 7 is locked by another user."
+    )
+
+    async def person(controller: SessionController, session: RuntimeSession) -> None:
+        while True:
+            await asyncio.sleep(0.1)
+            req = controller.active
+            if req is None or req.status != "pending":
+                continue
+            assert req.kind == "unrecoverable" and req.screenshot
+            controller.decide(req.id, "take_control", "supervisor-jo")
+            while controller.state != ControlState.HUMAN:
+                await asyncio.sleep(0.05)
+            controller.decide(req.id, "hand_back", "supervisor-jo", "batch lock message is informational")
+            return
+
+    r = await run_replay(
+        balance_cap,
+        tenant_id="pinecrest",
+        inputs={"member_number": "10042"},
+        operator="scripted",
+        operator_hook=person,
+        runs_root=tmp_path,
+    )
+    assert r.status == "succeeded", r.error
+    assert [i.kind for i in r.interventions] == ["unrecoverable"]
+    step = next(s for s in r.steps if s.step_id == "click_member_inquiry")
+    assert step.status == "completed_by_human"

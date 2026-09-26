@@ -9,7 +9,11 @@ Status tells the caller what kind of answer it got:
 * ``failed``            a hard failure with enough detail to debug.
 
 ``side_effect`` answers the first question after any failure on a write flow:
-did anything commit? ``retry_safe`` is derived from it.
+did anything commit? ``retry_safe`` is derived from it (and from the outcome):
+re-running with the same inputs cannot apply a change twice. ``error.transient``
+says whether the failure is expected to clear on its own; it is never true when
+a retry would not be safe. Whether a retry would *help* after a business outcome
+is the outcome's ``caller_guidance``.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ FailureCode = Literal[
     "CAPABILITY_INVALID",
     # runtime
     "TARGET_NOT_FOUND",
+    "TARGET_NOT_ACTIONABLE",
     "AMBIGUOUS_TARGET",
     "TIMEOUT",
     "CHECKPOINT_FAILED",
@@ -44,7 +49,7 @@ FailureCode = Literal[
     "DISCOVERY_STUCK",
     "INTERNAL",
 ]
-RETRYABLE: frozenset[str] = frozenset({"TIMEOUT", "APP_ERROR", "SESSION_LOST"})
+TRANSIENT: frozenset[str] = frozenset({"TIMEOUT", "APP_ERROR", "SESSION_LOST"})
 
 
 class OutcomeInfo(BaseModel):
@@ -63,7 +68,7 @@ class FailureInfo(BaseModel):
     step_intent: str | None = None
     expected: str | None = None
     observed: str | None = None
-    retryable: bool = False
+    transient: bool = False  # expected to clear on its own; never true unless retry_safe
     reason: str | None = None  # e.g. AUTH_FAILED reason
     hint: str | None = None
     near_misses: list[str] = Field(default_factory=list)
@@ -144,7 +149,7 @@ class RunResult(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def trace_sha256(self) -> str:
+    def path_sha256(self) -> str:
         """The path this run took: each step, how it ended, and which locator strategy matched.
 
         Replay is deterministic: the same capability on the same application state takes the

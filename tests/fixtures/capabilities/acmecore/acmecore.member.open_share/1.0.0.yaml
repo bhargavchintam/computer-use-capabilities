@@ -46,7 +46,10 @@ contract:
       caller_guidance: Ask the user to double-check the member number. Safe to retry with a corrected number.
     ACCOUNT_RESTRICTED:
       description: The member record is restricted for this operator.
-      caller_guidance: Do not retry automatically. Route the request to staff with supervisor access.
+      caller_guidance: Retrying will not help; route the request to staff with supervisor access.
+    APPROVAL_DENIED:
+      description: A human operator declined the commit step; nothing was committed.
+      caller_guidance: Tell the user staff declined the request. Do not retry without new instructions.
     INSUFFICIENT_FUNDS:
       description: PRIMARY SAVINGS does not have enough available balance.
       caller_guidance: Tell the user the available balance is too low; retry with a smaller amount.
@@ -177,11 +180,19 @@ implementation:
         strategies:
           - {kind: role_name, role: button, name: Confirm}
           - {kind: attr, tag: input, attrs: {name: btnConfirm}}
-      pre:
-        - {text_visible: {container: ["frame:work"], text: {param: member_number}}}
-        - {text_visible: {container: ["frame:work"], text: {param: share_type}}}
-        - {text_visible: {container: ["frame:work"], text: {param: initial_deposit}}}
-        - {text_visible: {container: ["frame:work"], text: {param: nickname}}}
+      pre:  # each input, read from its labelled field on the review page, must equal what we commit
+        - field_value:
+            target: {container: ["frame:work"], strategies: [{kind: label, role: cell, label: "Member #:"}]}
+            equals: {param: member_number}
+        - field_value:
+            target: {container: ["frame:work"], strategies: [{kind: label, role: cell, label: "Share Type:"}]}
+            equals: {param: share_type}
+        - field_value:
+            target: {container: ["frame:work"], strategies: [{kind: label, role: cell, label: "Initial Deposit:"}]}
+            equals: {param: initial_deposit}
+        - field_value:
+            target: {container: ["frame:work"], strategies: [{kind: label, role: cell, label: "Nickname:"}]}
+            equals: {param: nickname}
       expect:
         - {document_changed: {container: ["frame:work"]}}
         - {text_visible: {container: ["frame:work"], text: Share Opened}}

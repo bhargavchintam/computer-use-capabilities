@@ -34,6 +34,10 @@ from .replay import OperatorHook, OperatorMode, run_replay
 from .runtime import RuntimeSession
 
 
+class DiscoveryRefused(ValueError):
+    """Discovery will not start: wrong environment or no second record to verify on."""
+
+
 class DiscoveryReport(BaseModel):
     run_id: str
     status: str
@@ -129,6 +133,17 @@ async def run_discovery(
     record_video: bool = False,
 ) -> DiscoveryReport:
     tenant = load_tenant(tenant_id)
+    if tenant.environment != "sandbox":
+        raise DiscoveryRefused(
+            f"discovery runs only on sandbox tenants with synthetic data; {tenant.id} is {tenant.environment}. "
+            "Discover on a sandbox, then replay the approved capability here."
+        )
+    if not verify_inputs:
+        raise DiscoveryRefused(
+            "pass at least one --verify-input name=value: verify-by-replay must run on a different record"
+        )
+    if spec is None and not goal:
+        raise DiscoveryRefused("give a natural-language goal or a goal spec")
     app = load_app_profile(tenant.app)
     policy_cfg = load_policy(tenant.policy)
     runs_root = runs_root or repo_root() / "runs"
@@ -138,8 +153,7 @@ async def run_discovery(
     report = DiscoveryReport(run_id=recorder.run_id, status="failed", evidence_dir=str(recorder.dir))
 
     if spec is None:
-        if not goal:
-            raise ValueError("give a natural-language goal or a goal spec")
+        assert goal is not None
         spec, meta = await compile_goal(goal, app)
         for name, v in spec.sample_inputs.items():
             redactor.add_param(name, v, spec.inputs[name].sensitivity)
@@ -148,6 +162,13 @@ async def run_discovery(
         for name, v in spec.sample_inputs.items():
             redactor.add_param(name, v, spec.inputs[name].sensitivity)
     report.goal = spec.goal
+    unknown = sorted(set(verify_inputs) - set(spec.inputs))
+    if unknown or all(spec.sample_inputs.get(k) == v for k, v in verify_inputs.items()):
+        recorder.close()
+        raise DiscoveryRefused(
+            f"--verify-input must name inputs of this goal ({sorted(spec.inputs)}) and change at least "
+            f"one value from the discovered record (unknown: {unknown or 'none'})"
+        )
     persisted_spec = spec.model_dump(mode="json")
     persisted_spec["sample_inputs"] = {k: redactor.scrub_text(v) for k, v in spec.sample_inputs.items()}
     (recorder.dir / "goal_spec.yaml").write_text(dump_yaml(persisted_spec), encoding="utf-8")
@@ -228,13 +249,16 @@ async def run_discovery(
             spec,
             outcome,
             app,
-            tenant_id,
             tenant,
             recorder,
             redactor,
             registry,
             runs_root,
             verify_inputs,
+            operator=operator,
+            operator_hook=operator_hook,
+            console_port=console_port,
+            headed=headed,
         )
     persisted = report.model_dump(mode="json")
     for key in ("evidence_dir", "capability_path"):
@@ -253,13 +277,17 @@ async def _compile_and_verify(
     spec: GoalSpec,
     outcome: Any,
     app: AppProfile,
-    tenant_id: str,
     tenant: Any,
     recorder: RunRecorder,
     redactor: Redactor,
     registry: Registry,
     runs_root: Path,
     verify_inputs: dict[str, str] | None,
+    *,
+    operator: OperatorMode,
+    operator_hook: OperatorHook | None,
+    console_port: int,
+    headed: bool | None,
 ) -> None:
     try:
         cap, notes = compile_capability(
@@ -271,9 +299,11 @@ async def _compile_and_verify(
         return
     cap = cap.model_copy(update={"version": _next_version(registry, cap)})
     report.compile_notes = notes
-    findings = lint(cap, samples=spec.sample_inputs, secrets=redactor.secret_values)
+    findings = lint(
+        cap, samples=spec.sample_inputs, secrets=redactor.secret_values, masked=redactor.masked_values
+    )
     report.lint_findings = findings
-    if findings:  # fail closed: a leaky artifact is never written anywhere
+    if findings:  # fail closed: a leaky or unverifiable artifact is never written anywhere
         report.status, report.code, report.message = "failed", "LINT_FAILED", "; ".join(findings)
         recorder.event("lint_failed", findings=findings)
         return
@@ -281,14 +311,20 @@ async def _compile_and_verify(
         "capability_compiled", capability=cap.ref, steps=len(cap.implementation.steps), notes=notes
     )
     inputs = {**spec.sample_inputs, **(verify_inputs or {})}
-    approve = (
-        outcome.commit_approved_by is not None
-    )  # the operator approved this flow's commit in sandbox discovery
     verification: RunResult | None = None
     for attempt in range(3):
         (recorder.dir / "capability.candidate.yaml").write_text(model_to_yaml(cap), encoding="utf-8")
+        # A verification commit is a new commit on another record: it needs its own approval,
+        # from the same operator channel as the discovery run (never inherited).
         verification = await run_replay(
-            cap, tenant_id=tenant_id, inputs=inputs, approve=approve, runs_root=runs_root
+            cap,
+            tenant_id=tenant.id,
+            inputs=inputs,
+            runs_root=runs_root,
+            operator=operator,
+            operator_hook=operator_hook,
+            console_port=console_port,
+            headed=headed,
         )
         recorder.event(
             "verify_by_replay",
@@ -296,9 +332,12 @@ async def _compile_and_verify(
             verification_run=verification.run_id,
             status=verification.status,
             code=verification.error.code if verification.error else None,
+            side_effect=verification.side_effect,
         )
         if verification.status == "succeeded" or verification.error is None:
             break
+        if verification.side_effect not in ("none", "not_committed"):
+            break  # something may have been committed: never replay the flow again to calibrate
         if verification.error.code not in ("CHECKPOINT_FAILED", "UNRECOGNIZED_STATE", "TIMEOUT"):
             break
         calibrated = _drop_landmark(cap, verification.error.step_id)
@@ -309,13 +348,16 @@ async def _compile_and_verify(
     report.verification = {
         "run_id": verification.run_id,
         "status": verification.status,
+        "side_effect": verification.side_effect,
         "error": verification.error.model_dump(mode="json") if verification.error else None,
         "evidence_dir": verification.evidence_dir,
     }
     if verification.status != "succeeded":
         report.status, report.code = "failed", "VERIFY_FAILED"
         report.message = (
-            "the compiled artifact did not replay deterministically; kept in the run folder for review"
+            "verification stopped at the commit gate: an operator must approve the verification commit"
+            if verification.status == "needs_human"
+            else "the compiled artifact did not replay deterministically; kept in the run folder for review"
         )
         return
     cap.provenance.verified_by_runs.append(verification.run_id)
@@ -327,4 +369,4 @@ async def _compile_and_verify(
     )
 
 
-__all__ = ["DiscoveryReport", "compile_goal", "run_discovery"]
+__all__ = ["DiscoveryRefused", "DiscoveryReport", "compile_goal", "run_discovery"]

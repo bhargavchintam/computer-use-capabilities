@@ -85,6 +85,15 @@ _PINECREST = [
         restricted=True,
         shares=[Share("S01", "PRIMARY SAVINGS", _d("4400.00"), _d("4375.00"), rate="0.10%")],
     ),
+    Member(  # checking only: "what is the savings balance?" has a legitimate answer of "none"
+        "10091",
+        "VOSS, ADRIAN K",
+        "900-67-3348",
+        "05/27/1995",
+        "212 Hemlock St, Pinecrest WA",
+        "(206) 555-0191",
+        shares=[Share("S10", "SHARE DRAFT CHECKING", _d("1250.00"), _d("1250.00"), rate="0.00%")],
+    ),
 ]
 
 _LAKESIDE = [

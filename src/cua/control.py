@@ -15,6 +15,8 @@ State machine::
   the window) is an implicit takeover: automation yields and waits for hand-back.
 * Everything the human does is captured and recorded; values typed into
   secret fields (password, PIN) are never captured.
+* A native page dialog that opens while a person holds the lease is theirs to
+  answer (relayed to the operator console), never automation's.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from pydantic import BaseModel, Field
 from .evidence import RunRecorder, utcnow
 from .models.results import HumanAction
 from .redaction import Redactor
+from .surface.base import DialogDecision
 
 InterventionKind = Literal["approval", "stuck", "unrecoverable", "human_required", "implicit_takeover"]
 DecisionKind = Literal["approve", "reject", "take_control", "hand_back", "abort"]
@@ -76,6 +79,19 @@ class InterventionRequest(BaseModel):
 
 
 @dataclass
+class PendingDialog:
+    id: str
+    type: str
+    message: str  # redacted
+    default: DialogDecision
+    asked_at: str
+    future: asyncio.Future[DialogDecision]
+
+    def view(self) -> dict[str, str]:
+        return {"id": self.id, "type": self.type, "message": self.message, "default": self.default}
+
+
+@dataclass
 class Resolution:
     request: InterventionRequest
     kind: ResolutionKind
@@ -107,6 +123,8 @@ class SessionController:
         self._human_actions: list[HumanAction] = []
         self._captured: list[dict[str, Any]] = []
         self._pending_capture: tuple[dict[str, Any], list[str]] | None = None
+        self.pending_dialog: PendingDialog | None = None
+        self.dialog_timeout_s = 120.0
         # Hooks: the surface brings the window forward; operator surfaces get notified.
         self.on_take_control: Callable[[], Awaitable[None]] | None = None
         self.on_request: list[Callable[[InterventionRequest], None]] = []
@@ -286,6 +304,38 @@ class SessionController:
         if decision not in req.allowed_decisions and decision != "hand_back":
             return False, f"decision {decision} not allowed for this intervention"
         self._decisions.put_nowait((request_id, decision, operator, note))
+        return True, "accepted"
+
+    # ------------------------------------------------------------------ page dialogs under human control
+    async def ask_dialog(self, typ: str, message: str, default: DialogDecision) -> DialogDecision:
+        """The page opened a dialog while a person holds the session: the person decides."""
+        pending = PendingDialog(
+            id="dlg-" + secrets.token_hex(3),
+            type=typ,
+            message=message,
+            default=default,
+            asked_at=utcnow(),
+            future=asyncio.get_running_loop().create_future(),
+        )
+        self.pending_dialog = pending
+        self.recorder.event("dialog_relayed", dialog_id=pending.id, dialog_type=typ, message=message)
+        try:
+            return await asyncio.wait_for(asyncio.shield(pending.future), timeout=self.dialog_timeout_s)
+        except TimeoutError:
+            self.recorder.event("dialog_unanswered", dialog_id=pending.id, action="dismiss")
+            return "dismiss"  # nobody answered: the choice that confirms nothing
+        finally:
+            self.pending_dialog = None
+
+    def answer_dialog(self, dialog_id: str, decision: str, operator: str) -> tuple[bool, str]:
+        p = self.pending_dialog
+        if p is None or p.id != dialog_id:
+            return False, "no such pending dialog"
+        if decision not in ("accept", "dismiss"):
+            return False, "decision must be accept or dismiss"
+        if not p.future.done():
+            p.future.set_result(decision)  # type: ignore[arg-type]
+        self.recorder.event("dialog_answered", dialog_id=dialog_id, decision=decision, operator=operator)
         return True, "accepted"
 
     # ------------------------------------------------------------------ human input capture

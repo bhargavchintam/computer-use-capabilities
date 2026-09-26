@@ -32,7 +32,7 @@ def test_overlay_applies_only_to_its_vendor_version() -> None:
     assert p.overlays_applied == ["acmecore-7.3"]
     first = p.capability.step("click_member_inquiry").target.strategies[0].model_dump()
     assert first == {"kind": "role_name", "role": "link", "name": "Member Lookup"}
-    assert p.labels == {"share_type": {"Holiday Club": "Christmas Club"}}
+    assert p.labels == {}  # the label map is for share_type, which this capability does not take
     # the contract is untouched by overlays
     assert p.capability.contract == p.base.contract
 
@@ -107,3 +107,51 @@ def test_linter_fails_closed_on_leaks() -> None:
     leaky = type(cap).model_validate(data)
     findings = lint(leaky, samples={"member_number": "10042"}, secrets=[])
     assert any("member_number" in f for f in findings) and any("money" in f for f in findings)
+
+
+def test_whole_token_and_exact_amount_matching() -> None:
+    """The pre-commit echo check must not pass on look-alike values (a reviewer's example page)."""
+    from cua.checks import _same_amount, contains_value
+
+    page = "Member #: 100421 Initial Deposit: $1,250.00 Nickname: Gift funds for 2027"
+    assert not contains_value(page, "10042")
+    assert not contains_value(page, "250.00")
+    assert not contains_value(page, "Gift fund")
+    assert contains_value("Initial Deposit: $250.00", "$250.00") and contains_value(
+        "Nickname: Gift fund", "Gift fund"
+    )
+    assert _same_amount("$250.00", "250") and not _same_amount("$1,250.00", "250.00")
+
+
+def test_label_maps_apply_only_to_capabilities_with_that_input() -> None:
+    cap = load_fixture("acmecore.member.open_share")
+    p = resolve_plan(
+        cap, load_tenant("lakeside"), load_app_profile("acmecore"), load_policy("default"), load_overlays()
+    )
+    assert p.labels == {"share_type": {"Holiday Club": "Christmas Club"}}
+    assert p.overlays_applied == ["acmecore-7.3"]
+
+
+def test_an_overlay_cannot_change_a_commit_steps_checkpoints() -> None:
+    cap = load_fixture("acmecore.member.open_share")
+    overlay = load_overlays()[0].model_copy(deep=True)
+    data = overlay.model_dump(mode="json", exclude_none=True)
+    data["capabilities"] = {cap.id: {"steps": {"click_confirm": {"expect": []}}}}
+    bad = type(overlay).model_validate(data)
+    with pytest.raises(ValueError, match="checkpoints"):
+        resolve_plan(
+            cap, load_tenant("lakeside"), load_app_profile("acmecore"), load_policy("default"), [bad]
+        )
+
+
+def test_lint_requires_checkable_commits_and_refuses_masked_pii() -> None:
+    cap = load_fixture("acmecore.member.open_share")
+    assert lint(cap, samples={}, secrets=[]) == []
+    data = cap.model_dump(mode="json", exclude_none=True)
+    confirm = next(s for s in data["implementation"]["steps"] if s["id"] == "click_confirm")
+    confirm["pre"] = []
+    from cua.models import Capability
+
+    findings = lint(Capability.model_validate(data), samples={}, secrets=[])
+    assert any("no pre-checks" in f for f in findings)
+    assert any("PII" in f for f in lint(cap, samples={}, secrets=[], masked=["Share Opened"]))

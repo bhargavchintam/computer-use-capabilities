@@ -718,7 +718,7 @@
     },
     "OutcomeSpec": {
       "additionalProperties": false,
-      "description": "A legitimate business result the caller must handle (not an error).",
+      "description": "A legitimate business result the caller must handle (not an error).\n\n``retry_safe`` says whether calling again with the same inputs could apply a change\ntwice (false e.g. when the app reports an earlier submission may have gone through).\nWhether a retry would *help* is what ``caller_guidance`` is for.",
       "properties": {
         "description": {
           "title": "Description",

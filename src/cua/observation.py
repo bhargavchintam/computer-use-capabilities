@@ -1,7 +1,7 @@
 """Render a page snapshot as compact text, for the model or for evidence.
 
-Everything goes through the redactor: values beside sensitive labels are
-masked outright, money keeps only its shape for the model, and caller inputs
+Everything goes through the redactor: values beside sensitive labels (or
+under sensitive column headers) are masked outright, money keeps only its shape for the model, and caller inputs
 appear as their {{placeholder}} so the model never sees concrete values.
 """
 
@@ -66,10 +66,18 @@ def _item(it: dict[str, Any], redactor: Redactor, scrub: Any, for_model: bool, m
             out.append(f"    {scrub(p['label'])} [{p['ref']}] {value}")
         return out
     if t == "table":
-        headers = " | ".join(scrub(h) for h in it["headers"])
+        hdrs = list(it["headers"])
+        headers = " | ".join(scrub(h) for h in hdrs)
         out = [f"[{it['ref']}] table ({it.get('total_rows', len(it['rows']))} rows): {headers}"]
         for row in it["rows"][:max_rows]:
-            out.append("    " + " | ".join(f"[{c['ref']}] {scrub(c['text'])}" for c in row))
+            cells = []
+            for i, c in enumerate(row):
+                # a column headed "Name" holds PII just like a "Name:" field does
+                header = hdrs[i] if i < len(hdrs) else ""
+                cells.append(
+                    f"[{c['ref']}] {redactor.scrub_value_for_label(header, c['text'], for_model=for_model)}"
+                )
+            out.append("    " + " | ".join(cells))
         if len(it["rows"]) > max_rows:
             out.append(f"    … {len(it['rows']) - max_rows} more rows")
         return out

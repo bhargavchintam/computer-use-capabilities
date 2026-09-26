@@ -136,7 +136,7 @@ messages:
     routes: ["/core/inquiry", "/cu/lookup", "/core/member/*"]
     outcome: ACCOUNT_RESTRICTED
     description: The member record is restricted (e.g. an employee account) for this operator.
-    caller_guidance: Do not retry automatically. Route the request to staff with supervisor access.
+    caller_guidance: Retrying will not help; route the request to staff with supervisor access.
   insufficient_funds:
     pattern: "(?i)exceeds the available balance"
     container: ["frame:work"]

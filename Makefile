@@ -26,8 +26,8 @@ lint:
 	uv run ruff format --check src tests mock_bank scripts
 	uv run mypy src/cua
 
-schema:         ## export the capability JSON Schema
-	uv run cua capabilities schema --out schemas/capability.schema.json
+schema:         ## export the capability and run-result JSON Schemas
+	uv run cua capabilities schema
 
 evidence:       ## regenerate deterministic replay evidence (needs `make mock`), then audit it
 	uv run python scripts/generate_evidence.py

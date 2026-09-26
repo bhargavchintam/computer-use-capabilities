@@ -2,7 +2,13 @@
 
 Every wait is a race between the state we expect, every known runtime
 condition, and a timeout, so nothing ever proceeds blindly and nothing sleeps
-blindly. Every exit is classified into the result contract (see models/results.py).
+blindly. Every exit is classified into the result contract (see models/results.py),
+including bugs and infrastructure failures (INTERNAL).
+
+A commit is dispatched at most once per run: the moment its click is attempted the
+run counts as possibly committed, and no retry, re-drive or hand-back ever clicks it
+again. Whatever a person does while holding the session is classified by the same
+policy, so a commit made by hand is never reported as "nothing happened".
 """
 
 from __future__ import annotations
@@ -10,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+import traceback
 from collections.abc import Awaitable, Callable, Coroutine
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -20,10 +27,11 @@ from .configio import load_app_profile, load_overlays, load_policy, load_tenant,
 from .control import ControlLost, ControlState, DecisionKind, InterventionKind, SessionController
 from .control import Resolution as Handoff
 from .evidence import RunRecorder, utcnow
-from .models import Capability, Step, describe
+from .models import Capability, Overlay, Step, describe
+from .models.capability import ENGINE_OUTCOMES
 from .models.conditions import PatternArgs, TextMatches
 from .models.results import (
-    RETRYABLE,
+    TRANSIENT,
     FailureCode,
     FailureInfo,
     InterventionRecord,
@@ -33,16 +41,29 @@ from .models.results import (
     StepReport,
     WarningRecord,
 )
+from .models.targets import TableCell
 from .policy import PolicyEngine
 from .redaction import Redactor
 from .runtime import AuthFailed, Hit, OutcomeRule, RuntimeGuard, RuntimeSession
-from .surface.base import NotReady, SessionLost
-from .surface.web import Resolution
+from .surface.base import ActionFailed, NotReady, Resolution, SessionLost
 from .tenancy import EffectivePlan, resolve_plan, version_in
 
 OperatorMode = Literal["none", "console", "scripted"]
 OperatorHook = Callable[[SessionController, RuntimeSession], Coroutine[Any, Any, None]]
+Replan = Callable[[str], EffectivePlan]
 MAX_REDRIVES = 2
+# Hard failures a person at the live session can often resolve (drift, an unknown page or
+# pop-up, a control that will not act). With an operator connected they escalate once first.
+ESCALATABLE: frozenset[str] = frozenset(
+    {
+        "TARGET_NOT_FOUND",
+        "AMBIGUOUS_TARGET",
+        "TARGET_NOT_ACTIONABLE",
+        "UNRECOGNIZED_STATE",
+        "CHECKPOINT_FAILED",
+        "TIMEOUT",
+    }
+)
 
 
 # ---------------------------------------------------------------------------------- helpers
@@ -107,8 +128,15 @@ def parse_value(text: str, kind: str, currency: str | None = None) -> Any:
         m = re.search(r"-?\$?\s?-?[\d,]*\d(?:\.\d+)?", t)
         if not m:
             raise ValueError("no amount found")
-        amount = Decimal(re.sub(r"[^\d.\-]", "", m.group()))
-        return {"amount": f"{amount:.2f}", "currency": currency or "USD"}
+        amount = Decimal(re.sub(r"[^\d.]", "", m.group()))
+        # Ledger screens write negatives as -1.00, (1.00), 1.00- or 1.00 DR.
+        negative = (
+            "-" in m.group()
+            or (t.startswith("(") and t.endswith(")"))
+            or t.endswith("-")
+            or re.search(r"\bDR\b", t, re.IGNORECASE) is not None
+        )
+        return {"amount": f"{-amount if negative else amount:.2f}", "currency": currency or "USD"}
     if kind == "integer":
         return int(re.sub(r"[,\s]", "", t))
     if not t:
@@ -138,6 +166,7 @@ class ReplayEngine:
         inputs: dict[str, str],
         tenant_version: str,
         invocation_approved: bool,
+        replan: Replan | None = None,
     ) -> None:
         self.plan = plan
         self.cap = plan.capability
@@ -149,6 +178,7 @@ class ReplayEngine:
         self.policy = policy
         self.tenant_version = tenant_version
         self.invocation_approved = invocation_approved
+        self.replan = replan
         self.checks = Checks(
             self.surface,
             params=inputs,
@@ -164,10 +194,15 @@ class ReplayEngine:
         self.warnings: list[WarningRecord] = []
         self.interventions: list[InterventionRecord] = []
         self.approved_steps: set[str] = set()
-        self.commit_dispatched: str | None = None
+        self.dispatched_steps: set[str] = set()  # commit steps whose click was ever attempted
+        self.commit_dispatched: str | None = None  # dispatched, not yet verified
         self.committed = False
         self.side_effect_hint: str | None = None
+        self.human_commit = False  # a person used a commit-class control
         self.redrives = 0
+        self.escalated: set[str] = set()
+        self.step_docs: dict[tuple[str, ...], str] = {}
+        self.current_step: Step | None = None
         self._diag: tuple[list[tuple[dict[str, Any], int]], bool] = ([], False)
 
     def _outcome_rules(self) -> list[OutcomeRule]:
@@ -190,93 +225,115 @@ class ReplayEngine:
 
     # ------------------------------------------------------------------ top level
     async def run(self) -> tuple[str, OutcomeInfo | None, FailureInfo | None, Parked | None]:
-        steps = self.cap.implementation.steps
         try:
             version = await self.session.sign_on()
-            if version and not version_in(self.cap.implementation.app.versions, version):
-                raise await self._fail(
-                    "INCOMPATIBLE_VERSION",
-                    f"the app reports AcmeCore {version}, outside {self.cap.implementation.app.versions}",
-                    status="rejected",
-                )
-            if version and version != self.tenant_version:
-                self._warn(
-                    "PRODUCT_VERSION_MISMATCH",
-                    None,
-                    f"tenant config says {self.tenant_version} but the app reports {version}",
-                )
-            await self.session.goto(self.cap.implementation.entry.route)
-            i = 0
-            while i < len(steps):
+            await self._check_version(version)
+            while True:
                 try:
-                    await self._run_step(steps[i])
-                    i += 1
+                    await self.session.goto(self.cap.implementation.entry.route)
+                    for step in self.cap.implementation.steps:
+                        await self._run_step(step)
+                    await self._verify_success()
+                    return "succeeded", None, None, None
                 except _Redrive:
                     self.redrives += 1
                     if self.redrives > MAX_REDRIVES:
                         raise await self._fail(
-                            "APP_ERROR", "the flow had to be restarted too many times", step=steps[i]
+                            "APP_ERROR",
+                            "the flow had to be restarted too many times",
+                            step=self.current_step,
+                            transient=True,
                         ) from None
                     self.checks.outputs.clear()
                     for r in self.reports.values():
                         r.status = "not_run"
-                    await self.session.goto(self.cap.implementation.entry.route)
-                    i = 0
-            await self._verify_success()
-            return "succeeded", None, None, None
         except _Stop as s:
-            return s.status, s.outcome, s.error, s.parked
+            return self._stopped(s)
         except SessionLost as e:
-            err = FailureInfo(code="SESSION_LOST", message=f"the live session was lost: {e}", retryable=True)
-            return "failed", None, err, None
+            err = FailureInfo(code="SESSION_LOST", message=f"the live session was lost: {e}", transient=True)
+            return self._stopped(_Stop("failed", error=err))
         except AuthFailed as e:
             err = FailureInfo(
                 code="AUTH_FAILED",
                 message=str(e),
                 reason=e.reason,
-                retryable=e.reason == "timeout",
+                transient=e.reason == "timeout",
                 hint="check the tenant's credentials / account status" if e.reason != "timeout" else None,
             )
-            return "failed", None, err, None
+            return self._stopped(_Stop("failed", error=err))
+        except Exception as e:  # noqa: BLE001 - the result contract holds even for bugs
+            return self._stopped(await self._internal(e))
+
+    def _stopped(self, s: _Stop) -> tuple[str, OutcomeInfo | None, FailureInfo | None, Parked | None]:
+        if s.error is not None:
+            self.recorder.event("failure", **s.error.model_dump(exclude_none=True))
+        return s.status, s.outcome, s.error, s.parked
+
+    async def _internal(self, e: Exception) -> _Stop:
+        tb = traceback.format_exc().replace(str(repo_root()), "<repo>")
+        self.recorder.save_text("snapshots/internal-error.txt", tb)
+        detail = f"{type(e).__name__}: {e}"
+        try:
+            return await self._fail("INTERNAL", f"unexpected error: {detail}"[:500], step=self.current_step)
+        except Exception:  # noqa: BLE001 - even evidence capture failed; still return a result
+            return _Stop(
+                "failed", error=FailureInfo(code="INTERNAL", message=self.redactor.scrub_text(detail)[:500])
+            )
+
+    async def _check_version(self, version: str | None) -> None:
+        """The version the application reports decides which overlays apply, not the config alone."""
+        if version is None:
+            self._warn("PRODUCT_VERSION_UNKNOWN", None, "the application did not report its version")
+            return
+        app = self.cap.implementation.app
+        if not version_in(app.versions, version):
+            raise await self._fail(
+                "INCOMPATIBLE_VERSION",
+                f"the application reports {app.product} {version}, outside {app.versions}",
+                hint="discover or re-target this capability for the new version",
+            )
+        if version == self.tenant_version:
+            return
+        alt = self.replan(version) if self.replan else None
+        if alt is not None and alt.plan_sha256 != self.plan.plan_sha256:
+            raise await self._fail(
+                "INCOMPATIBLE_VERSION",
+                f"the tenant is configured for {self.tenant_version} but the application reports {version}, "
+                f"which selects different version overlays ({self.plan.overlays_applied or 'none'} -> "
+                f"{alt.overlays_applied or 'none'})",
+                hint="a vendor upgrade happened: update product_version in the tenant configuration",
+            )
+        self._warn(
+            "PRODUCT_VERSION_MISMATCH",
+            None,
+            f"the tenant is configured for {self.tenant_version} but the application reports {version}; "
+            "the plan is the same for both",
+        )
 
     # ------------------------------------------------------------------ steps
     async def _run_step(self, step: Step) -> None:
         report = self.reports[step.id]
         t0 = time.monotonic()
+        self.current_step = step
         self.guard.step_id = step.id
         self.session.dialog_expectation = step.on_dialog
+        self.step_docs = await self.surface.doc_ids()
         self.recorder.event(
             "step_started", step_id=step.id, intent=step.intent, action=step.action, effect=step.effect
         )
         try:
-            if step.action in ("extract", "extract_table"):
-                res = await self._acquire(step)
-                if res is None:
-                    report.status = "skipped"
-                    return
-                await self._extract(step, res)
-                report.attempts, report.status = report.attempts + 1, "done"
-                report.strategy = f"{res.strategy['kind']}#{res.index}"
-                return
             while True:
-                report.attempts += 1
-                res = await self._acquire(step)
-                if res is None:
-                    report.status = "skipped"
+                try:
+                    await self._drive(step, report)
                     return
-                outcome = await self._act(step, res)
-                if outcome == "approved":
-                    report.attempts -= 1  # re-resolving after an approval is not a failed attempt
-                    continue
-                if outcome == "retry":
-                    if report.attempts >= 3:
-                        raise await self._fail(
-                            "TIMEOUT", "the control never became actionable", step=step, retryable=True
-                        )
-                    continue
-                report.status = "completed_by_human" if outcome == "completed_by_human" else "done"
-                report.strategy = f"{res.strategy['kind']}#{res.index}"
-                return
+                except _Stop as stop:
+                    if not self._escalatable(stop, step):
+                        raise
+                    self.escalated.add(step.id)
+                    if await self._escalate_failure(stop, step) == "completed_by_human":
+                        report.status = "completed_by_human"
+                        return
+                    # the operator fixed the page: drive the step again (a second failure is final)
         except _Stop as stop:
             report.status = (
                 "outcome"
@@ -299,67 +356,132 @@ class ReplayEngine:
                     duration_ms=report.duration_ms,
                 )
 
+    async def _drive(self, step: Step, report: StepReport) -> None:
+        if step.action in ("extract", "extract_table"):
+            for _ in range(3):
+                res = await self._acquire(step)
+                if res is None:
+                    report.status = "skipped"
+                    return
+                report.attempts += 1
+                try:
+                    await self._extract(step, res)
+                except NotReady:
+                    continue  # the page re-rendered under us; read it again
+                report.status, report.strategy = "done", f"{res.strategy['kind']}#{res.index}"
+                return
+            raise await self._fail(
+                "TIMEOUT", "the page kept changing while reading", step=step, transient=True
+            )
+        while True:
+            report.attempts += 1
+            res = await self._acquire(step)
+            if res is None:
+                report.status = "skipped"
+                return
+            outcome = await self._act(step, res)
+            if outcome == "approved":
+                report.attempts -= 1  # re-resolving after an approval is not a failed attempt
+                continue
+            if outcome == "retry":
+                if report.attempts >= 3:
+                    raise await self._fail(
+                        "TIMEOUT", "the control never became actionable", step=step, transient=True
+                    )
+                continue
+            report.status = "completed_by_human" if outcome == "completed_by_human" else "done"
+            report.strategy = f"{res.strategy['kind']}#{res.index}"
+            return
+
     async def _act(
         self, step: Step, res: Resolution
     ) -> Literal["done", "retry", "approved", "completed_by_human"]:
-        control = (await self.surface.describe(res.element)).get("control") or {}
-        live_effect = self.policy.classify(step.action, control, step.effect)
-        if live_effect == "commit" and step.effect != "commit":
-            raise await self._fail(
-                "POLICY_DENIED",
-                f"step {step.id} was recorded as '{step.effect}' but now resolves to a commit-class "
-                f'control ({control.get("role")} "{control.get("name")}"); refusing to act',
-                step=step,
-            )
-        if step.effect == "commit":
-            await self._check_pre(step)
-            await self._check_commit_target(step, res)
-            if not (self.invocation_approved or step.id in self.approved_steps):
-                pre_docs = await self.surface.doc_ids()
-                handoff = await self._escalate(
-                    "approval",
-                    step,
-                    reason=f"step {step.id} is a commit ({step.intent}); it needs an explicit approval",
-                    proposed=f'click {control.get("role")} "{control.get("name")}" on the verified review page',
-                    allowed=["approve", "reject", "take_control", "abort"],
+        if step.effect == "commit" and step.id in self.dispatched_steps:  # defence in depth
+            raise await self._fail("INTERNAL", f"refusing to dispatch commit step {step.id} twice", step=step)
+        try:
+            control = (await self.surface.describe(res.element)).get("control") or {}
+            live_effect = self.policy.classify(step.action, control, step.effect)
+            if live_effect == "commit" and step.effect != "commit":
+                raise await self._fail(
+                    "POLICY_DENIED",
+                    f"step {step.id} was recorded as '{step.effect}' but now resolves to a commit-class "
+                    f'control ({control.get("role")} "{control.get("name")}"); refusing to act',
+                    step=step,
                 )
-                if handoff.kind == "approve":
-                    self.approved_steps.add(step.id)
-                    self.recorder.event(
-                        "commit_approved",
-                        step_id=step.id,
-                        by=handoff.request.operator,
-                        plan_sha256=self.plan.plan_sha256,
-                    )
-                    return "approved"  # re-resolve the target: the page may have changed while waiting
-                if handoff.kind == "reject":
-                    raise _Stop(
-                        "business_outcome",
-                        outcome=OutcomeInfo(
-                            code="APPROVAL_DENIED",
-                            description="An operator declined the commit step.",
-                            caller_guidance="Tell the user the request was declined by staff; do not retry automatically.",
-                            retry_safe=True,
-                            message=handoff.request.note,
-                            step_id=step.id,
-                        ),
-                    )
-                # The operator took control (e.g. performed the commit themselves): re-check, never assume.
-                return await self._after_handback(step, before_docs=pre_docs, handoff=handoff)
-
-        before_docs = await self.surface.doc_ids()
-        baseline = await self.session.red_baseline()
+            if step.effect == "commit":
+                await self._check_pre(step)
+                await self._check_commit_target(step, res)
+                approved = self.invocation_approved or step.id in self.approved_steps
+                if self.policy.commit_gate(approved=approved) != "allow":
+                    return await self._approve_commit(step, control)
+            before_docs = await self.surface.doc_ids()
+            baseline = await self.session.red_baseline()
+        except NotReady:
+            return "retry"  # nothing was sent yet; resolve the control again
         try:
             async with self.controller.automated_action(self.controller.epoch):
+                if step.effect == "commit":
+                    # Write-ahead: from here on the commit may have happened; it is never attempted again.
+                    self.commit_dispatched = step.id
+                    self.dispatched_steps.add(step.id)
+                    self.recorder.event("commit_dispatched", step_id=step.id)
                 await self._perform(step, res)
         except ControlLost:
             return await self._implicit_handback(step, before_docs)
         except NotReady:
+            if step.effect == "commit":
+                # The page started navigating under the click: the submission may be on its way.
+                # Wait for the outcome like any dispatched commit; never click again.
+                return await self._post_wait(step, before_docs, baseline)
             return "retry"
-        if step.effect == "commit":
-            self.commit_dispatched = step.id
-            self.recorder.event("commit_dispatched", step_id=step.id)
+        except ActionFailed as e:
+            if step.effect == "commit" and e.before_dispatch:
+                self.commit_dispatched = None  # the surface gave up before any input was sent
+                self.dispatched_steps.discard(step.id)
+                self.recorder.event("commit_not_dispatched", step_id=step.id, reason=str(e))
+            raise await self._fail(
+                "TARGET_NOT_ACTIONABLE",
+                f"found the control for {step.id} but could not {step.action} it: {e}",
+                step=step,
+                hint="the control is disabled or covered, or the value is not one of its options",
+            ) from e
         return await self._post_wait(step, before_docs, baseline)
+
+    async def _approve_commit(
+        self, step: Step, control: dict[str, Any]
+    ) -> Literal["done", "retry", "approved", "completed_by_human"]:
+        pre_docs = await self.surface.doc_ids()
+        handoff = await self._escalate(
+            "approval",
+            step,
+            reason=f"step {step.id} is a commit ({step.intent}); it needs an explicit approval",
+            proposed=f'click {control.get("role")} "{control.get("name")}" on the verified review page',
+            allowed=["approve", "reject", "take_control", "abort"],
+        )
+        if handoff.kind == "approve":
+            self.approved_steps.add(step.id)
+            self.recorder.event(
+                "commit_approved",
+                step_id=step.id,
+                by=handoff.request.operator,
+                plan_sha256=self.plan.plan_sha256,
+            )
+            return "approved"  # re-resolve the target: the page may have changed while waiting
+        if handoff.kind == "reject":
+            spec = self.cap.contract.outcomes.get("APPROVAL_DENIED") or ENGINE_OUTCOMES["APPROVAL_DENIED"]
+            raise _Stop(
+                "business_outcome",
+                outcome=OutcomeInfo(
+                    code="APPROVAL_DENIED",
+                    description=spec.description,
+                    caller_guidance=spec.caller_guidance,
+                    retry_safe=spec.retry_safe,
+                    message=handoff.request.note,
+                    step_id=step.id,
+                ),
+            )
+        # The operator took control (e.g. performed the commit themselves): re-check, never assume.
+        return await self._after_handback(step, before_docs=pre_docs, handoff=handoff)
 
     async def _perform(self, step: Step, res: Resolution) -> None:
         el = res.element
@@ -450,9 +572,28 @@ class ReplayEngine:
 
     async def _acquire(self, step: Step) -> Resolution | None:
         timeout = min(step.timeout_ms, 2000) if step.optional else step.timeout_ms
+        key = next((t for t in step.target.strategies if isinstance(t, TableCell)), None)
+        row_absent = False
+
+        async def want() -> Any:
+            nonlocal row_absent
+            res = await self._resolve(step)
+            if res is not None or key is None or not step.keyed_extract:
+                return res
+            # The table is on a settled page but the keyed row is not: that is data, not drift.
+            if self.surface.settled(self.timeouts.settle_ms) and await self.surface.table_present(
+                step.target.container, key.headers
+            ):
+                row_absent = True
+                return True
+            return None
+
         while True:
-            kind, value = await self._race(lambda: self._resolve(step), phase="pre", timeout_ms=timeout)
+            kind, value = await self._race(want, phase="pre", timeout_ms=timeout)
             if kind == "ok":
+                if row_absent:
+                    assert key is not None
+                    raise self._output_not_present(step, key)
                 if value.index > 0:
                     primary, count = self._diag[0][0]
                     self._warn(
@@ -473,6 +614,26 @@ class ReplayEngine:
                 self.recorder.event("optional_step_skipped", step_id=step.id)
                 return None
             raise await self._not_found(step)
+
+    def _output_not_present(self, step: Step, key: TableCell) -> _Stop:
+        spec = self.cap.contract.outcomes.get("OUTPUT_NOT_PRESENT") or ENGINE_OUTCOMES["OUTPUT_NOT_PRESENT"]
+        equals = (
+            key.row.equals if isinstance(key.row.equals, str) else self.checks.resolve_value(key.row.equals)
+        )
+        self.recorder.event("output_not_present", step_id=step.id, output=step.output)
+        return _Stop(
+            "business_outcome",
+            outcome=OutcomeInfo(
+                code="OUTPUT_NOT_PRESENT",
+                description=spec.description,
+                caller_guidance=spec.caller_guidance,
+                retry_safe=spec.retry_safe,
+                message=self.redactor.scrub_text(
+                    f'no row where {key.row.column} is "{equals}" (output {step.output})'
+                ),
+                step_id=step.id,
+            ),
+        )
 
     async def _post_wait(
         self, step: Step, before_docs: dict[tuple[str, ...], str], baseline: dict[tuple[str, ...], set[str]]
@@ -502,17 +663,22 @@ class ReplayEngine:
 
     # ------------------------------------------------------------------ conditions, commits
     async def _check_pre(self, step: Step) -> None:
+        """Commit only after the review page shows exactly what we are about to commit."""
         for cond in step.pre:
-            ok = False
-            for _ in range(8):
-                try:
-                    if await self.checks.holds(cond, step_target=step.target):
-                        ok = True
-                        break
-                except NotReady:
-                    pass
-                await asyncio.sleep(self.timeouts.poll_ms / 1000)
-            if not ok:
+
+            async def want(c: Any = cond) -> bool:
+                return await self.checks.holds(c, step_target=step.target)
+
+            while True:
+                kind, value = await self._race(want, phase="pre", timeout_ms=min(3000, step.timeout_ms))
+                if kind == "ok":
+                    break
+                if kind == "hit":
+                    await self._handle_hit(value, step, None)
+                    continue
+                if kind == "takeover":
+                    await self._implicit_handback(step, None)
+                    continue
                 raise await self._fail(
                     "CHECKPOINT_FAILED",
                     "pre-commit check failed: the review page does not show "
@@ -523,11 +689,12 @@ class ReplayEngine:
                 )
 
     async def _check_commit_target(self, step: Step, res: Resolution) -> None:
+        """A commit acts only on its primary locator, or on a fallback another strategy confirms."""
         if res.index == 0:
             return
         strategies = strategy_dicts(step.target, self.checks.params)
-        for other in strategies:
-            if other is res.strategy:
+        for i, other in enumerate(strategies):
+            if i == res.index:
                 continue
             if await self.surface.strategies_agree(step.target.container, res.strategy, other):
                 return
@@ -550,9 +717,13 @@ class ReplayEngine:
             message=hit.message,
         )
         if hit.kind == "recoverable":
-            outcome = await self.guard.recover(
-                hit, can_redrive=self.commit_dispatched is None and not self.committed
-            )
+            try:
+                outcome = await self.guard.recover(
+                    hit, can_redrive=self.commit_dispatched is None and not self.committed
+                )
+            except ControlLost:  # a person grabbed the window during the recovery
+                await self._implicit_handback(step, before_docs)
+                return "continue"
             if outcome.status == "handled":
                 return "continue"
             if outcome.status == "redrive":
@@ -572,7 +743,7 @@ class ReplayEngine:
                 code,
                 f"{hit.message} (persisted after bounded recovery: {outcome.detail})",
                 step=step,
-                retryable=code in RETRYABLE,
+                transient=code in TRANSIENT,
             )
         if hit.kind == "business_outcome":
             spec = self.cap.contract.outcomes.get(hit.code or "")
@@ -594,7 +765,7 @@ class ReplayEngine:
             )
             return await self._after_handback(step, before_docs, handoff)
         code = failure_code(hit.code, "UNRECOGNIZED_STATE")
-        raise await self._fail(code, hit.message, step=step, retryable=code in RETRYABLE)
+        raise await self._fail(code, hit.message, step=step, transient=code in TRANSIENT)
 
     # ------------------------------------------------------------------ human in the loop
     async def _escalate(
@@ -621,21 +792,40 @@ class ReplayEngine:
         )
         self._record_intervention(handoff)
         if handoff.kind in ("parked", "timeout"):
-            req = handoff.request
-            raise _Stop(
-                "needs_human",
-                parked=Parked(
-                    intervention_id=req.id,
-                    deadline=req.deadline,
-                    session_retained=False,  # this prototype ends the process; see REPORT for the durable design
-                    request_path=f"interventions/{req.id}.json",
-                ),
-            )
+            raise await self._parked(handoff, step)
         if handoff.kind == "abort":
             raise await self._fail(
                 "ABORTED_BY_OPERATOR", f"operator {handoff.request.operator} aborted the run", step=step
             )
         return handoff
+
+    async def _parked(self, handoff: Handoff, step: Step) -> _Stop:
+        """Nobody resolved the request in time (or no operator is connected). If a person held
+        the session in the meantime, look at the page before claiming nothing happened."""
+        if handoff.kind == "timeout" and step.effect == "commit" and step.expect:
+            with_docs = self.step_docs
+            try:
+                done = all(
+                    [
+                        await self.checks.holds(c, step_target=step.target, before_docs=with_docs)
+                        for c in step.expect
+                    ]
+                )
+            except NotReady:
+                done = False
+            if done:
+                self.committed, self.commit_dispatched = True, None
+                self.recorder.event("resynced", step_id=step.id, result="commit_found_after_timeout")
+        req = handoff.request
+        return _Stop(
+            "needs_human",
+            parked=Parked(
+                intervention_id=req.id,
+                deadline=req.deadline,
+                session_retained=False,  # this prototype ends the process; see REPORT for the durable design
+                request_path=f"interventions/{req.id}.json",
+            ),
+        )
 
     def _record_intervention(self, handoff: Handoff) -> None:
         req = handoff.request
@@ -653,6 +843,25 @@ class ReplayEngine:
                 human_actions=handoff.human_actions,
             )
         )
+        self._note_human_effects(handoff)
+
+    def _note_human_effects(self, handoff: Handoff) -> None:
+        """Human actions go through the same effect classification as automation's."""
+        if handoff.captured:
+            self.side_effect_hint = None  # what the app said before a person acted no longer holds
+        for cap in handoff.captured:
+            payload = cap.get("payload") or {}
+            control = (payload.get("describe") or {}).get("control")
+            action = {"change": "fill", "enter": "press_key"}.get(str(payload.get("type")), "click")
+            if self.policy.classify(action, control) == "commit":
+                self.human_commit = True
+                self.recorder.event(
+                    "human_commit_class_action",
+                    intervention_id=handoff.request.id,
+                    control=self.redactor.scrub_text(
+                        f'{(control or {}).get("role")} "{(control or {}).get("name")}"'
+                    ),
+                )
 
     async def _after_handback(
         self, step: Step, before_docs: dict[tuple[str, ...], str] | None, handoff: Handoff
@@ -660,16 +869,28 @@ class ReplayEngine:
         """Re-sync after a human handed control back: never assume, re-check."""
         if step.expect and before_docs is not None:
             await self.session.wait_settled()
-            if all(
-                [
-                    await self.checks.holds(c, step_target=step.target, before_docs=before_docs)
-                    for c in step.expect
-                ]
-            ):
+            try:
+                done = all(
+                    [
+                        await self.checks.holds(c, step_target=step.target, before_docs=before_docs)
+                        for c in step.expect
+                    ]
+                )
+            except NotReady:
+                done = False
+            if done:
                 if step.effect == "commit":
                     self.committed, self.commit_dispatched = True, None
                 self.recorder.event("resynced", step_id=step.id, result="completed_by_human")
                 return "completed_by_human"
+        if step.effect == "commit" and self.commit_dispatched == step.id:
+            raise await self._fail(
+                "RESYNC_FAILED",
+                f"after hand-back the commit step {step.id} has not reached its checkpoint; "
+                "a commit is never re-attempted automatically",
+                step=step,
+                hint="check in the application whether this request went through before retrying",
+            )
         if await self._resolve(step) is not None:
             self.recorder.event("resynced", step_id=step.id, result="retry_step")
             return "retry"
@@ -687,16 +908,31 @@ class ReplayEngine:
         if handoff.kind == "abort":
             raise await self._fail("ABORTED_BY_OPERATOR", "operator aborted the run", step=step)
         if handoff.kind == "timeout":
-            raise _Stop(
-                "needs_human",
-                parked=Parked(
-                    intervention_id=handoff.request.id,
-                    deadline=handoff.request.deadline,
-                    session_retained=False,
-                    request_path=f"interventions/{handoff.request.id}.json",
-                ),
-            )
+            raise await self._parked(handoff, step)
         return await self._after_handback(step, before_docs, handoff)
+
+    async def _escalate_failure(self, stop: _Stop, step: Step) -> Literal["completed_by_human", "retry"]:
+        err = stop.error
+        assert err is not None
+        self.recorder.event("escalating_failure", step_id=step.id, code=err.code, message=err.message)
+        handoff = await self._escalate(
+            "unrecoverable",
+            step,
+            reason=f"{err.code}: {err.message}",
+            allowed=["take_control", "abort"],
+            proposed=err.hint,
+        )
+        return await self._after_handback(step, self.step_docs, handoff)
+
+    def _escalatable(self, stop: _Stop, step: Step) -> bool:
+        return (
+            stop.status == "failed"
+            and stop.error is not None
+            and stop.error.code in ESCALATABLE
+            and self.controller.operator_available
+            and self.controller.state == ControlState.AUTOMATION
+            and step.id not in self.escalated
+        )
 
     # ------------------------------------------------------------------ failures
     def _warn(self, code: str, step_id: str | None, detail: str) -> None:
@@ -713,9 +949,11 @@ class ReplayEngine:
         observed: str | None = None,
         hint: str | None = None,
         near_misses: list[str] | None = None,
-        retryable: bool = False,
+        transient: bool = False,
         status: str = "failed",
     ) -> _Stop:
+        """Build a failure with its evidence (masked screenshot + redacted snapshot).
+        It is logged once, when the run ends with it (an escalated failure may still recover)."""
         evidence = []
         shot = await self.session.screenshot(f"failure-{step.id if step else 'run'}")
         if shot:
@@ -730,21 +968,20 @@ class ReplayEngine:
             message=self.redactor.scrub_text(message),
             step_id=step.id if step else None,
             step_intent=step.intent if step else None,
-            expected=expected,
-            observed=observed,
-            retryable=retryable,
+            expected=self.redactor.scrub_text(expected) if expected else None,
+            observed=self.redactor.scrub_text(observed) if observed else None,
+            transient=transient,
             hint=hint,
             near_misses=near_misses or [],
             evidence=evidence,
         )
-        self.recorder.event("failure", **err.model_dump(exclude_none=True))
         return _Stop(status, error=err)
 
     async def _not_found(self, step: Step) -> _Stop:
         diag, present = self._diag
         where = "/".join(step.target.container) or "top"
         if not present:
-            return await self._fail("TIMEOUT", f"container {where} never appeared", step=step, retryable=True)
+            return await self._fail("TIMEOUT", f"container {where} never appeared", step=step, transient=True)
         tried = [
             f"{s['kind']} { ({k: v for k, v in s.items() if k != 'kind'}) } -> {n} matches" for s, n in diag
         ]
@@ -790,7 +1027,7 @@ class ReplayEngine:
                 step=step,
                 expected=expected,
                 observed="no new document",
-                retryable=True,
+                transient=True,
             )
         if changed:
             excerpt = (await self.session.excerpt())[:400]
@@ -807,26 +1044,34 @@ class ReplayEngine:
 
     async def _verify_success(self) -> None:
         success = self.cap.implementation.success
-        for _ in range(12):
-            try:
-                if await self.checks.holds(success):
-                    self.recorder.event("success_verified", condition=describe(success))
-                    return
-            except NotReady:
-                pass
-            await asyncio.sleep(self.timeouts.poll_ms / 1000)
-        raise await self._fail(
-            "CHECKPOINT_FAILED", "the final success condition did not hold", expected=describe(success)
-        )
+        last = self.cap.implementation.steps[-1]
+
+        async def want() -> bool:
+            return await self.checks.holds(success)
+
+        while True:
+            kind, value = await self._race(want, phase="post", timeout_ms=3000)
+            if kind == "ok":
+                self.recorder.event("success_verified", condition=describe(success))
+                return
+            if kind == "hit":
+                await self._handle_hit(value, last, None)
+                continue
+            if kind == "takeover":
+                await self._implicit_handback(last, None)
+                continue
+            raise await self._fail(
+                "CHECKPOINT_FAILED", "the final success condition did not hold", expected=describe(success)
+            )
 
     def side_effect(self) -> str:
-        if self.cap.contract.effects == "read_only":
-            return "none"
         if self.committed:
             return "committed"
+        if self.human_commit:
+            return "unknown"  # a person used a commit-class control and the result was not verified
         if self.commit_dispatched:
             return self.side_effect_hint or "unknown"
-        return "not_committed"
+        return "none" if self.cap.contract.effects == "read_only" else "not_committed"
 
 
 # ---------------------------------------------------------------------------------- entry point
@@ -846,13 +1091,14 @@ async def run_replay(
     console_port: int = 8765,
     record_video: bool = False,
     tenant_overrides: dict[str, Any] | None = None,
+    overlays: list[Overlay] | None = None,
 ) -> RunResult:
     tenant = load_tenant(tenant_id)
     if tenant_overrides:
         tenant = tenant.model_copy(update=tenant_overrides)
     app = load_app_profile(tenant.app)
     policy_cfg = load_policy(tenant.policy)
-    overlays = load_overlays()
+    all_overlays = load_overlays() if overlays is None else overlays
     redactor = Redactor(app.sensitive_labels)
     recorder = RunRecorder(runs_root or repo_root() / "runs", "replay", redactor)
     started, t0 = utcnow(), time.monotonic()
@@ -903,16 +1149,20 @@ async def run_replay(
         return finish(base)
 
     # ---- pre-flight: nothing on the UI is touched --------------------------------
-    if cap.implementation.app.product != tenant.app or not version_in(
-        cap.implementation.app.versions, tenant.product_version
-    ):
+    binding = cap.implementation.app
+    if binding.product != tenant.app or not version_in(binding.versions, tenant.product_version):
         return reject(
             "INCOMPATIBLE_VERSION",
-            f"{cap.ref} supports {cap.implementation.app.product} "
-            f"{cap.implementation.app.versions}; tenant {tenant.id} runs {tenant.app} {tenant.product_version}",
+            f"{cap.ref} supports {binding.product} {binding.versions}; "
+            f"tenant {tenant.id} runs {tenant.app} {tenant.product_version}",
+        )
+    if binding.surface != app.surface:
+        return reject(
+            "CAPABILITY_INVALID",
+            f"{cap.ref} drives a {binding.surface} surface; {app.product} is {app.surface}",
         )
     try:
-        plan = resolve_plan(cap, tenant, app, policy_cfg, overlays, use_overlays=use_overlays)
+        plan = resolve_plan(cap, tenant, app, policy_cfg, all_overlays, use_overlays=use_overlays)
     except ValueError as e:
         return reject("CAPABILITY_INVALID", str(e))
     base.effective_plan_sha256, base.overlays_applied = plan.plan_sha256, plan.overlays_applied
@@ -922,7 +1172,7 @@ async def run_replay(
     for name, value in clean.items():
         redactor.add_param(name, value, cap.contract.inputs[name].sensitivity)
     engine_policy = PolicyEngine(policy_cfg, tenant, app)
-    problems = engine_policy.preflight(cap)
+    problems = engine_policy.preflight(cap, plan.overlays)
     if problems:
         code, _ = problems[0]
         return reject(code, "; ".join(msg for _, msg in problems))
@@ -932,6 +1182,11 @@ async def run_replay(
         overlays=plan.overlays_applied,
         inputs={k: redactor.scrub_text(v) for k, v in clean.items()},
     )
+
+    def replan(version: str) -> EffectivePlan:
+        return resolve_plan(
+            cap, tenant, app, policy_cfg, all_overlays, use_overlays=use_overlays, product_version=version
+        )
 
     # ---- execution -------------------------------------------------------------
     controller = SessionController(
@@ -960,6 +1215,7 @@ async def run_replay(
         inputs=clean,
         tenant_version=tenant.product_version,
         invocation_approved=approve,
+        replan=replan,
     )
     console = None
     hook_task: asyncio.Task[None] | None = None
@@ -973,6 +1229,11 @@ async def run_replay(
         if operator_hook is not None:
             hook_task = asyncio.create_task(operator_hook(controller, session))
         status, outcome, error, parked = await engine.run()
+    except Exception as e:  # noqa: BLE001 - e.g. the browser or console could not start
+        detail = redactor.scrub_text(f"{type(e).__name__}: {e}")[:500]
+        recorder.event("internal_error", detail=detail)
+        status, outcome, parked = "failed", None, None
+        error = FailureInfo(code="INTERNAL", message=detail)
     finally:
         if hook_task:
             hook_task.cancel()
@@ -982,6 +1243,11 @@ async def run_replay(
             await console.stop()
 
     side_effect = engine.side_effect()
+    retry_safe = side_effect in ("none", "not_committed") and (outcome.retry_safe if outcome else True)
+    if error is not None and error.transient and not retry_safe:
+        error = error.model_copy(
+            update={"transient": False}
+        )  # never "try again" when that could double-apply
     result = base.model_copy(
         update={
             "status": status,
@@ -989,8 +1255,7 @@ async def run_replay(
             "outcome": outcome,
             "error": error,
             "side_effect": side_effect,
-            "retry_safe": side_effect in ("none", "not_committed")
-            and (outcome.retry_safe if outcome else True),
+            "retry_safe": retry_safe,
             "recoveries": engine.guard.recoveries,
             "warnings": engine.warnings,
             "interventions": engine.interventions,

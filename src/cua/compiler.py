@@ -4,9 +4,11 @@ What the compiler guarantees (and the linter enforces, failing closed):
 * every target strategy was validated at record time to hit exactly the element acted on;
 * outputs are located by label or column header + row key, never by their own value;
 * concrete input values never appear: they become {param} references;
-* no secret, PII-shaped string or money value appears anywhere in the artifact;
-* every navigating step has a postcondition (new document + a safe landmark);
-* every commit step has pre-checks that the review page echoes the inputs.
+* no secret, PII-shaped string, masked PII value or money value appears anywhere in the artifact;
+* every navigating step has a postcondition: a new document, plus a landmark when a safe one exists;
+* every commit step has a checkpoint, and pre-checks that the review page shows the inputs
+  (bound to the labelled field when there is one, and compared exactly: money as numbers);
+* every business outcome the engine itself can return is declared in the contract.
 """
 
 from __future__ import annotations
@@ -15,12 +17,12 @@ import fnmatch
 import hashlib
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any
 
 from .agent.loop import AgentOutcome
-from .checks import money_variants
+from .checks import _same_amount, contains_value, money_variants
 from .models import (
     AppProfile,
     Capability,
@@ -31,7 +33,17 @@ from .models import (
     Provenance,
     TenantConfig,
 )
-from .models.capability import AppBinding, CallExample, Contract, Entry, Implementation, OutcomeDetector, Step
+from .models.capability import (
+    ENGINE_OUTCOMES,
+    AppBinding,
+    CallExample,
+    Contract,
+    Entry,
+    Implementation,
+    InputSpec,
+    OutcomeDetector,
+    Step,
+)
 from .models.conditions import (
     AllOf,
     ContainerArgs,
@@ -218,13 +230,31 @@ def _expect(step: TraceStep, avoid: list[str], value: Any) -> list[Any]:
 
 
 def _visible(value: str, text: str, money: bool) -> bool:
-    hay = _norm(text)
     variants = money_variants(value) if money else [value]
-    return any(_norm(v) in hay for v in variants)
+    return any(contains_value(text, v) for v in variants)
 
 
-def _pre_checks(step: TraceStep, spec: GoalSpec) -> list[Any]:
-    """Commit only after the review page shows every input we are about to commit."""
+def _shows(shown: str, value: str, money: bool) -> bool:
+    """A labelled field shows exactly this value (money compared as numbers)."""
+    return _same_amount(_norm(shown), value) if money else _norm(shown) == _norm(value)
+
+
+def _echo_check(container: list[str], frame: FrameState, name: str, value: str, money: bool) -> Any | None:
+    """The strongest check that `frame` shows input `name`: bound to its labelled field when it has
+    one ("Initial Deposit:" shows exactly 250.00), else the value as a whole token in the page text."""
+    labels = [label for label, shown in frame.fields if _shows(shown, value, money)]
+    if len(labels) == 1:
+        target = Target.model_validate(
+            {"container": container, "strategies": [{"kind": "label", "role": "cell", "label": labels[0]}]}
+        )
+        return FieldValue(field_value=FieldValueArgs(target=target, equals=ParamRef(param=name)))
+    if _visible(value, frame.text, money):
+        return TextVisible(text_visible=TextArgs(container=container, text=ParamRef(param=name)))
+    return None
+
+
+def _pre_checks(step: TraceStep, spec: GoalSpec, notes: list[str]) -> list[Any]:
+    """Commit only after the review page shows exactly what we are about to commit."""
     if step.effect != "commit" or step.before is None:
         return []
     frame = step.before.frames.get(tuple(step.container))
@@ -232,11 +262,33 @@ def _pre_checks(step: TraceStep, spec: GoalSpec) -> list[Any]:
         return []
     out = []
     for name, value in spec.sample_inputs.items():
-        if _visible(value, frame.text, spec.inputs[name].type == "money"):
-            out.append(
-                TextVisible(text_visible=TextArgs(container=step.container, text=ParamRef(param=name)))
-            )
+        check = _echo_check(step.container, frame, name, value, spec.inputs[name].type == "money")
+        if check is None:
+            notes.append(f"input {name!r} is not shown before the commit, so it cannot be pre-checked")
+        else:
+            out.append(check)
     return out
+
+
+def _reconcile_enums(spec: GoalSpec, trace: list[TraceStep], notes: list[str]) -> dict[str, InputSpec]:
+    """An input chosen from a dropdown may only take values that dropdown offered at record time
+    (in the base product's vocabulary; version overlays map them to other versions' labels)."""
+    inputs = dict(spec.inputs)
+    for t in trace:
+        m = re.fullmatch(r"\{\{\s*([a-z][a-z0-9_]*)\s*\}\}", (t.value_text or "").strip())
+        options = [str(o) for o in (((t.describe or {}).get("control") or {}).get("options") or [])]
+        if t.action != "select" or t.actor != "agent" or not m or not options or m.group(1) not in inputs:
+            continue
+        name, current = m.group(1), inputs[m.group(1)]
+        if current.enum:
+            kept = [v for v in current.enum if v in options]
+            if kept != current.enum:
+                notes.append(f"input {name!r}: dropped values the dropdown does not offer")
+            inputs[name] = current.model_copy(update={"enum": kept or options})
+        else:
+            inputs[name] = current.model_copy(update={"type": "enum", "enum": options})
+            notes.append(f"input {name!r}: allowed values taken from the dropdown's {len(options)} options")
+    return inputs
 
 
 # ---------------------------------------------------------------------------------- compile
@@ -294,7 +346,7 @@ def compile_capability(
                     "output": t.output,
                     "parse": spec.outputs[t.output].type if t.action == "extract" and t.output else None,
                     "columns": t.columns,
-                    "pre": _pre_checks(t, spec),
+                    "pre": _pre_checks(t, spec, notes),
                     "expect": _expect(t, avoid, value),
                     "provenance": t.actor,
                 }
@@ -312,9 +364,11 @@ def compile_capability(
     if mark and _SAFE_LANDMARK.match(mark) and not any(_norm(a) in _norm(mark) for a in avoid if a):
         conds.append(TextVisible(text_visible=TextArgs(container=container, text=mark)))
     frame = final.frames.get(tuple(container))
-    for name, v in samples.items():
-        if spec.inputs[name].sensitivity == "pii_identifier" and frame and _visible(v, frame.text, False):
-            conds.append(TextVisible(text_visible=TextArgs(container=container, text=ParamRef(param=name))))
+    for name, v in samples.items():  # identity: the result is about the record we were asked for
+        if spec.inputs[name].sensitivity == "pii_identifier" and frame:
+            check = _echo_check(container, frame, name, v, False)
+            if check is not None:
+                conds.append(check)
     conds.append(OutputsPresent(outputs_present=list(spec.outputs)))
 
     # business outcomes that can appear on the screens this flow visits
@@ -332,6 +386,12 @@ def compile_capability(
         detectors[rule.outcome] = OutcomeDetector(ref=msg_id)
 
     commits = any(s.effect == "commit" for s in steps)
+    # outcomes the replay engine itself returns for this flow are part of the contract too
+    if commits:
+        outcomes.setdefault("APPROVAL_DENIED", ENGINE_OUTCOMES["APPROVAL_DENIED"])
+    if any(s.keyed_extract for s in steps):
+        outcomes.setdefault("OUTPUT_NOT_PRESENT", ENGINE_OUTCOMES["OUTPUT_NOT_PRESENT"])
+    inputs = _reconcile_enums(spec, trace, notes)
     major, minor = tenant.product_version.split(".")[:2]
     cap_id = (
         spec.capability_id
@@ -347,13 +407,13 @@ def compile_capability(
         title=spec.title,
         description=f"Discovered for: {spec.goal}\nFlow: {flow}",
         contract=Contract(
-            inputs=spec.inputs,
+            inputs=inputs,
             outputs=spec.outputs,
             outcomes=outcomes,
             effects="commit" if commits else "read_only",
             idempotent=not commits,
             example=CallExample(
-                input={k: f"<{v.type}>" for k, v in spec.inputs.items()},
+                input={k: f"<{v.type}>" for k, v in inputs.items()},
                 output={k: _shape(v.type, v.columns) for k, v in spec.outputs.items()},
             ),
         ),
@@ -390,8 +450,11 @@ def _shape(kind: str, columns: Mapping[str, str] | None) -> Any:
 # ---------------------------------------------------------------------------------- linter
 
 
-def lint(cap: Capability, *, samples: dict[str, str], secrets: list[str]) -> list[str]:
-    """Fail closed: nothing concrete, secret or PII-shaped may be persisted in an artifact."""
+def lint(
+    cap: Capability, *, samples: dict[str, str], secrets: list[str], masked: Iterable[str] = ()
+) -> list[str]:
+    """Fail closed: nothing concrete, secret or PII-shaped may be persisted in an artifact, and a
+    commit must be checkable. `masked` are values the redactor hid as PII during discovery."""
     data = cap.model_dump(mode="json", exclude_none=True)
     for spec in data["contract"]["inputs"].values():  # enum options are UI vocabulary, not data
         spec.pop("enum", None)
@@ -403,6 +466,13 @@ def lint(cap: Capability, *, samples: dict[str, str], secrets: list[str]) -> lis
     for name, v in samples.items():
         if len(v) >= 3 and re.search(rf"(?<![\w]){re.escape(v)}(?![\w])", blob, re.I):
             findings.append(f"the concrete value of input {name!r} appears (it must be a {{param}})")
+    if any(len(v) >= 3 and re.search(rf"(?<![\w]){re.escape(v)}(?![\w])", blob, re.I) for v in masked):
+        findings.append("a value shown next to a sensitive label (PII) appears in the artifact")
+    for step in cap.implementation.steps:
+        if step.effect == "commit" and not step.expect:
+            findings.append(f"commit step {step.id} has no checkpoint, so its effect could never be verified")
+        if step.effect == "commit" and not step.pre:
+            findings.append(f"commit step {step.id} has no pre-checks: nothing proves what it will commit")
     for label, rx in (("SSN", SSN), ("email", EMAIL), ("phone", PHONE), ("API key", API_KEY)):
         if rx.search(blob):
             findings.append(f"a {label}-shaped string appears")

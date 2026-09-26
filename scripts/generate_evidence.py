@@ -48,12 +48,13 @@ def admin(tenant: str, path: str, body: dict[str, Any] | None = None) -> None:
 
 def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]]:
     draft = read.model_copy(update={"status": "draft", "approval": None})
+    member = {"member_number": "10042"}
     out = [
         dict(
             name="01-success",
             cap=read,
             tenant="pinecrest",
-            inputs={"member_number": "10042"},
+            inputs=member,
             expect=("succeeded", None),
             proves="happy path: typed outputs, success checkpoint verified, primary locators only",
         ),
@@ -71,10 +72,18 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             tenant="pinecrest",
             inputs={"member_number": "10013"},
             expect=("business_outcome", "ACCOUNT_RESTRICTED"),
-            proves="permission-type business outcome; guidance says do not retry",
+            proves="permission-type business outcome; guidance says retrying will not help",
         ),
         dict(
-            name="04-input-invalid",
+            name="04-no-savings-share",
+            cap=read,
+            tenant="pinecrest",
+            inputs={"member_number": "10091"},
+            expect=("business_outcome", "OUTPUT_NOT_PRESENT"),
+            proves="a checking-only member: the keyed row is missing, which is an answer, not UI drift",
+        ),
+        dict(
+            name="05-input-invalid",
             cap=read,
             tenant="pinecrest",
             inputs={"member_number": "12AB5"},
@@ -82,7 +91,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             proves="bad input rejected at pre-flight; the UI is never touched",
         ),
         dict(
-            name="05-maintenance-recovered",
+            name="06-maintenance-recovered",
             cap=read,
             tenant="pinecrest",
             inputs={"member_number": "10077"},
@@ -91,28 +100,28 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             proves="known interstitial dismissed by a bounded handler; logged in recoveries[]",
         ),
         dict(
-            name="06-session-expired-recovered",
+            name="07-session-expired-recovered",
             cap=read,
             tenant="pinecrest",
-            inputs={"member_number": "10042"},
+            inputs=member,
             fault=dict(kind="expire", path_prefix="/core/inquiry"),
             expect=("succeeded", None),
             proves="session timeout: deterministic re-sign-on + re-drive from entry (nothing committed yet)",
         ),
         dict(
-            name="07-app-error-failure",
+            name="08-app-error-failure",
             cap=read,
             tenant="pinecrest",
-            inputs={"member_number": "10042"},
+            inputs=member,
             fault=dict(kind="error500", count=10, path_prefix="/core/inquiry"),
             expect=("failed", "APP_ERROR"),
-            proves="bounded retries, then a retryable hard failure with masked screenshot + redacted snapshot",
+            proves="bounded retries, then a transient hard failure with masked screenshot + redacted snapshot",
         ),
         dict(
-            name="08-unknown-dialog-fails-safe",
+            name="09-unknown-dialog-fails-safe",
             cap=read,
             tenant="pinecrest",
-            inputs={"member_number": "10042"},
+            inputs=member,
             fault=dict(
                 kind="alert",
                 path_prefix="/core/inquiry",
@@ -122,7 +131,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             proves="an unrecognized pop-up is never guessed at: the run stops safely with evidence",
         ),
         dict(
-            name="09-production-draft-rejected",
+            name="10-production-draft-rejected",
             cap=draft,
             tenant="lakeside",
             inputs={"member_number": "20031"},
@@ -130,7 +139,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             proves="an unreviewed artifact cannot run on a production tenant",
         ),
         dict(
-            name="10-tenant-b-drift-no-overlay",
+            name="11-tenant-b-drift-no-overlay",
             cap=read,
             tenant="lakeside",
             inputs={"member_number": "20031"},
@@ -139,19 +148,20 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             proves="vendor 7.3 renamed a menu item: precise drift failure with near-miss hint",
         ),
         dict(
-            name="11-tenant-b-with-overlay",
+            name="12-tenant-b-with-overlay",
             cap=read,
             tenant="lakeside",
             inputs={"member_number": "20031"},
             expect=("succeeded", None),
-            proves="same artifact + shared 7.3 overlay; fallback locator flagged as drift; reordered columns read by header",
+            proves="same artifact + approved 7.3 overlay; fallback locator flagged as drift; columns read by header",
         ),
     ]
     if write is not None:
         base = {"member_number": "10042", "share_type": "Holiday Club", "nickname": "Gift fund"}
+        confirm = "/core/member/10042/newshare/confirm"
         out += [
             dict(
-                name="12-commit-parked-needs-approval",
+                name="13-commit-parked-needs-approval",
                 cap=write,
                 tenant="pinecrest",
                 inputs={**base, "initial_deposit": "250.00"},
@@ -159,13 +169,23 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
                 proves="a commit without approval parks as needs_human; side_effect not_committed",
             ),
             dict(
-                name="13-commit-with-approval",
+                name="14-commit-with-approval",
                 cap=write,
                 tenant="pinecrest",
                 inputs={**base, "initial_deposit": "250.00"},
                 approve=True,
                 expect=("succeeded", None),
-                proves="approved commit: review page echoes every input (pre-checks), side_effect committed",
+                proves="approved commit: each input checked against its field on the review page; committed",
+            ),
+            dict(
+                name="15-commit-response-lost",
+                cap=write,
+                tenant="pinecrest",
+                inputs={**base, "initial_deposit": "250.00"},
+                approve=True,
+                fault=dict(kind="slow_response", path_prefix=confirm, delay_ms=15000),
+                expect=("failed", "TIMEOUT"),
+                proves="the bank committed but the answer never came: side_effect unknown, never retried",
             ),
         ]
     return out
@@ -180,7 +200,7 @@ def classified(r: RunResult) -> dict[str, Any]:
         "recoveries": [f"{x.detector}: {x.action}" for x in r.recoveries],
         "warnings": [w.code for w in r.warnings],
         "overlays": r.overlays_applied,
-        "trace_sha256": r.trace_sha256,
+        "path_sha256": r.path_sha256,
     }
 
 
@@ -246,7 +266,7 @@ async def main(registry: Registry, read_ref: str, write_ref: str | None, out: Pa
         lines.append(
             f"| [`{row['scenario']}`]({row['scenario']}/) | {row['tenant']} | **{row['status']}** | "
             f"{row['code'] or '-'} | {row['side_effect']} | {extra} | "
-            f"{'yes' if row['second_run_identical'] else '**NO**'} (`{row['trace_sha256'][:12]}`) | {row['proves']} |"
+            f"{'yes' if row['second_run_identical'] else '**NO**'} (`{row['path_sha256'][:12]}`) | {row['proves']} |"
         )
     (out / "replay" / "SUMMARY.md").write_text("\n".join(lines) + "\n")
     shutil.rmtree(tmp, ignore_errors=True)

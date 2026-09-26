@@ -126,7 +126,12 @@ async def test_discovery_compiles_a_verified_capability(bank: Bank, tmp_path: Pa
         "equals": "PRIMARY SAVINGS",
     }
     assert cap.contract.effects == "read_only"
-    assert set(cap.contract.outcomes) == {"MEMBER_NOT_FOUND", "ACCOUNT_RESTRICTED", "INPUT_REJECTED_BY_APP"}
+    assert set(cap.contract.outcomes) == {
+        "MEMBER_NOT_FOUND",
+        "ACCOUNT_RESTRICTED",
+        "INPUT_REJECTED_BY_APP",
+        "OUTPUT_NOT_PRESENT",  # the balance is read from a keyed row: a missing row is an answer
+    }
     text = Path(report.capability_path or "").read_text()
     assert "10042" not in text and "12,450" not in text and "12450" not in text
     assert cap.provenance.verified_by_runs == [report.verification["run_id"]]
@@ -253,12 +258,19 @@ async def test_write_flow_discovery_with_operator_approval(bank: Bank, tmp_path:
     cap = load_model(Path(report.capability_path or ""), Capability)
     confirm = next(s for s in cap.implementation.steps if s.effect == "commit")
     assert confirm.id == "click_confirm"
-    assert {c.text_visible.text.param for c in confirm.pre} == {  # type: ignore[union-attr]
-        "member_number",
-        "share_type",
-        "initial_deposit",
-        "nickname",
+    # every input is checked against its own labelled field on the review page, exactly
+    checked = {
+        c.field_value.equals.param: c.field_value.target.strategies[0].label  # type: ignore[union-attr]
+        for c in confirm.pre
     }
+    assert checked == {
+        "member_number": "Member #:",
+        "share_type": "Share Type:",
+        "initial_deposit": "Initial Deposit:",
+        "nickname": "Nickname:",
+    }
+    assert "APPROVAL_DENIED" in cap.contract.outcomes
+    assert cap.contract.inputs["share_type"].enum == ["Holiday Club", "Vacation Club", "12 Month Certificate"]
     assert cap.contract.effects == "commit" and not cap.contract.idempotent
     assert "INSUFFICIENT_FUNDS" in cap.contract.outcomes and "MEMBER_NOT_FOUND" in cap.contract.outcomes
     receipts = bank.state("pinecrest")["receipts"]
@@ -315,3 +327,52 @@ async def test_stuck_agent_gets_help_and_the_history_stays_api_valid(bank: Bank,
     assert any(m["role"] == "system" for m in llm.requests[-1]), "the hand-back note reached the model"
     events = (Path(report.evidence_dir or "") / "events.jsonl").read_text()
     assert '"reason": "three consecutive failed actions"' in events
+
+
+async def test_discovery_refuses_production_and_insists_on_a_second_record(tmp_path: Path) -> None:
+    from cua.discovery import DiscoveryRefused
+
+    def never(text: str, turn: int) -> str:
+        raise AssertionError("the model must not be called")
+
+    kw: dict[str, Any] = {"spec": SPEC, "llm": ScriptedLLM(never), "runs_root": tmp_path}
+    with pytest.raises(DiscoveryRefused, match="sandbox"):
+        await run_discovery(tenant_id="lakeside", verify_inputs={"member_number": "20064"}, **kw)
+    with pytest.raises(DiscoveryRefused, match="verify-input"):
+        await run_discovery(tenant_id="pinecrest", verify_inputs={}, **kw)
+    with pytest.raises(DiscoveryRefused, match="change at least one value"):
+        await run_discovery(tenant_id="pinecrest", verify_inputs={"member_number": "10042"}, **kw)
+
+
+async def test_an_action_the_ui_cannot_take_goes_back_to_the_model(bank: Bank, tmp_path: Path) -> None:
+    """One bad action (an option the dropdown does not offer) is a tool error the model can correct,
+    never the end of a paid discovery run."""
+    from tests.helpers import scripted_operator
+
+    base = write_policy()
+    tried: dict[str, bool] = {}
+
+    def policy(text: str, turn: int) -> tuple[str, dict[str, Any]] | str:
+        m = re.search(r'\[(e\d+)\] combobox label="Share Type:"', text)
+        if "**Open New Share**" in text and m and not tried:
+            tried["once"] = True
+            return "select_option", {"ref": m.group(1), "option": "Platinum Club", "reason": "guess"}
+        return base(text, turn)
+
+    report = await run_discovery(
+        tenant_id="pinecrest",
+        spec=WRITE_SPEC,
+        llm=ScriptedLLM(policy),
+        runs_root=tmp_path / "runs",
+        registry=Registry(tmp_path / "registry"),
+        operator="scripted",
+        operator_hook=scripted_operator(approval="approve"),
+        verify_inputs={"initial_deposit": "100.00", "nickname": "Verify run"},
+    )
+    assert tried and report.status == "succeeded", report
+    events = (Path(report.evidence_dir or "") / "events.jsonl").read_text()
+    assert "could not perform select_option" in events
+    cap = load_model(Path(report.capability_path or ""), Capability)
+    assert [s.action for s in cap.implementation.steps].count(
+        "select"
+    ) == 1  # the failed try is not in the flow

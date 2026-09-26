@@ -36,6 +36,8 @@ class Registry:
         return sorted(caps, key=lambda c: Version(c.version))
 
     def get(self, ref: str) -> Capability:
+        """`id@version` exactly; a bare `id` means the newest *approved* version (the one callers
+        should get), or the newest draft when nothing is approved yet."""
         cap_id, _, version = ref.partition("@")
         caps = self.versions(cap_id)
         if not caps:
@@ -45,7 +47,8 @@ class Registry:
                 if c.version == version:
                     return c
             raise NotFound(f"{cap_id} has no version {version} (have {[c.version for c in caps]})")
-        return caps[-1]
+        approved = [c for c in caps if c.approval_valid()]
+        return (approved or caps)[-1]
 
     def save(self, cap: Capability, *, overwrite: bool = False) -> Path:
         path = self.path_for(cap)

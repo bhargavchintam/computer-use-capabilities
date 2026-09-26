@@ -20,9 +20,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from playwright.async_api import Dialog
-from playwright.async_api import Error as PWError
-
 from .checks import Checks, strategy_dicts
 from .configio import resolve_secret
 from .control import ControlState, SessionController
@@ -34,8 +31,7 @@ from .models.results import RecoveryRecord
 from .observation import render
 from .policy import PolicyEngine
 from .redaction import Redactor
-from .surface.base import NotReady
-from .surface.web import WebSurface
+from .surface.base import DialogDecision, NotReady, Surface, open_surface
 
 HitKind = Literal["recoverable", "human_required", "business_outcome", "fatal", "unrecognized"]
 
@@ -99,8 +95,11 @@ class RuntimeSession:
         self.redactor = redactor
         self.recorder = recorder
         self.controller = controller
-        self.surface = WebSurface(
-            tenant.base_url, headed=headed, video_dir=recorder.dir / "video" if record_video else None
+        self.surface: Surface = open_surface(
+            app.surface,
+            tenant.base_url,
+            headed=headed,
+            video_dir=recorder.dir / "video" if record_video else None,
         )
         self.dialogs: list[DialogEvent] = []
         self.dialog_expectation: DialogExpectation | None = None
@@ -139,13 +138,14 @@ class RuntimeSession:
             )
         return d.allowed
 
-    async def _on_dialog(self, dialog: Dialog) -> None:
-        msg, typ = dialog.message, dialog.type
-        default = "dismiss" if typ in ("confirm", "prompt", "beforeunload") else "accept"
+    async def _on_dialog(self, typ: str, msg: str) -> DialogDecision:
+        default: DialogDecision = "dismiss" if typ in ("confirm", "prompt", "beforeunload") else "accept"
         kind: Any = "unrecognized"
         action, rule = default, None
         if self.controller.state == ControlState.HUMAN:
-            kind, action = "human", "accept"  # the operator triggered it; logged, not second-guessed
+            # The person holding the lease decides, never automation (relayed to the operator console).
+            kind = "human"
+            action = await self.controller.ask_dialog(typ, self.redactor.scrub_text(msg), default)
         elif self.dialog_expectation and re.search(self.dialog_expectation.match, msg):
             kind, action = "expected", self.dialog_expectation.action
         else:
@@ -153,13 +153,12 @@ class RuntimeSession:
                 if re.search(r.match, msg):
                     kind, action, rule = r.kind, r.action, r.description
                     break
-        with contextlib.suppress(PWError):
-            await (dialog.accept() if action == "accept" else dialog.dismiss())
         ev = DialogEvent(typ, self.redactor.scrub_text(msg), action, kind, rule)
         self.dialogs.append(ev)
         self.recorder.event(
             "dialog", dialog_type=typ, message=ev.message, action=action, classification=kind, rule=rule
         )
+        return action
 
     # ------------------------------------------------------------------ navigation & auth
     async def goto(self, route: str) -> None:
@@ -194,11 +193,16 @@ class RuntimeSession:
             if res is None:
                 raise AuthFailed("form_not_found", f"sign-on control for step {step.id} not found")
             async with self.controller.automated_action():
-                if step.action == "fill":
-                    assert step.value is not None
-                    await self.surface.fill(res.element, checks.resolve_value(step.value))
-                else:
-                    await self.surface.click(res.element)
+                try:
+                    if step.action == "fill":
+                        assert step.value is not None
+                        await self.surface.fill(res.element, checks.resolve_value(step.value))
+                    else:
+                        await self.surface.click(res.element)
+                except NotReady:
+                    if step.action == "fill":
+                        raise AuthFailed("form_not_found", "the sign-on page changed while typing") from None
+                    # a click that raced its own navigation went through; the success check decides
         deadline = asyncio.get_running_loop().time() + self.timeouts.step_ms / 1000
         while True:
             try:
@@ -218,14 +222,20 @@ class RuntimeSession:
         self.recorder.event("signed_on", product_version=self.product_version)
         return self.product_version
 
-    async def probe_version(self) -> str | None:
+    async def probe_version(self, timeout_ms: int = 3000) -> str | None:
+        """The product version the application itself reports (a frame may still be loading)."""
         probe = self.app.version_probe
-        try:
-            text = await self.surface.page_text(probe.container) or ""
-        except NotReady:
-            return None
-        m = re.search(probe.pattern, text)
-        return m.group(1) if m else None
+        deadline = asyncio.get_running_loop().time() + timeout_ms / 1000
+        while True:
+            try:
+                m = re.search(probe.pattern, await self.surface.page_text(probe.container) or "")
+                if m:
+                    return m.group(1)
+            except NotReady:
+                pass
+            if asyncio.get_running_loop().time() > deadline:
+                return None
+            await asyncio.sleep(self.timeouts.poll_ms / 1000)
 
     # ------------------------------------------------------------------ evidence
     async def screenshot(self, label: str, marks: list[tuple[str, list[float]]] | None = None) -> str | None:
@@ -368,11 +378,15 @@ class RuntimeGuard:
         h = det.handler
         s = self.session
         if h.click is not None:
-            res, _, _ = await s.surface.resolve(h.click.container, strategy_dicts(h.click, {}))
+            try:
+                res, _, _ = await s.surface.resolve(h.click.container, strategy_dicts(h.click, {}))
+            except NotReady:
+                res = None
             if res is None:
                 return RecoveryOutcome("exhausted", "recovery control not found")
             async with s.controller.automated_action():
-                await s.surface.click(res.element)
+                with contextlib.suppress(NotReady):  # the acknowledge click navigated: that is the point
+                    await s.surface.click(res.element)
             await asyncio.sleep(s.timeouts.settle_ms / 1000)
             self._log_recovery(det.id, "clicked the acknowledge control")
             return RecoveryOutcome("handled")

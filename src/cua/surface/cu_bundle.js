@@ -388,8 +388,16 @@
         (el.tagName === 'BUTTON' && (el.getAttribute('type') || 'submit') === 'submit')),
       form_action: action,
       form_method: form ? (form.getAttribute('method') || 'get').toLowerCase() : null,
+      href: hrefPath(el),
+      options: el.tagName === 'SELECT' ? ArrayFrom(el.options).filter((o) => o.value !== '').map((o) => norm(o.text)) : null,
       secret: isSecretField(el),
     };
+  }
+
+  function hrefPath(el) {
+    const a = el.closest && el.closest('a[href]');
+    if (!a) return null;
+    try { return new URL(a.getAttribute('href'), D.baseURI).pathname; } catch (e) { return null; }
   }
 
   function describe(el) {
@@ -538,7 +546,7 @@
         if (st.b || st.big) emph.push(t.slice(0, 120));
       }
     }
-    return { doc_id: DOC_ID, url: D.location.href, frameset: isFrameset, emph, text: pageText() };
+    return { doc_id: DOC_ID, url: D.location.href, frameset: isFrameset, emph, text: pageText(), fields: fieldPairs() };
   }
 
   // ------------------------------------------------------------------ page text
@@ -570,10 +578,30 @@
     for (const cell of D.body.querySelectorAll('td,th')) {
       const t = norm(textOf(cell));
       if (MONEY.test(t)) { mark(cell); continue; }
-      const lab = proximityLabel(cell);
+      const lab = proximityLabel(cell) || columnHeader(cell);
       if (lab && want.has(normKey(lab))) mark(cell);
     }
     return count;
+  }
+
+  // The header of a data-table cell's column ("Name" in a search-results grid), or ''.
+  function columnHeader(cell) {
+    const table = cell.closest && cell.closest('table');
+    if (!table || !isDataTable(table) || cell.parentElement === table.rows[0]) return '';
+    return headerCells(table)[cell.cellIndex] || '';
+  }
+
+  // Label/value pairs a person reads on the page ("Initial Deposit:" -> "$250.00").
+  function fieldPairs() {
+    const out = [];
+    if (!D.body || D.body.tagName === 'FRAMESET') return out;
+    for (const t of D.body.querySelectorAll('table')) {
+      if (!isKvTable(t) || !isRendered(t)) continue;
+      for (const r of t.rows) {
+        for (let i = 0; i + 1 < r.cells.length; i += 2) out.push([norm(textOf(r.cells[i])), norm(textOf(r.cells[i + 1]))]);
+      }
+    }
+    return out.slice(0, 80);
   }
 
   // Rectangles (frame-relative) of every visible occurrence of the given values, so
@@ -665,6 +693,7 @@
     markSensitive,
     valueRects,
     readText: (el) => valueOf(el),
+    columnHeader: (el) => columnHeader(el),
     readTable: (table, columns) => {
       const hdr = headerCells(table).map(normKey);
       const idx = {};

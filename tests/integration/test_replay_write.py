@@ -168,3 +168,63 @@ async def test_supervisor_pin_handoff_on_the_same_session(
     events = (run_dir / "events.jsonl").read_text()
     for state in ('"to_state": "awaiting_human"', '"to_state": "human"', '"to_state": "automation"'):
         assert state in events
+
+
+async def test_a_page_dialog_while_a_person_holds_control_is_theirs_to_answer(
+    bank: Bank, share_cap: Capability, tmp_path: Path
+) -> None:
+    """Automation never answers a dialog on a person's behalf: it is relayed to the operator."""
+    import asyncio
+
+    from cua.control import ControlState, SessionController
+    from cua.runtime import RuntimeSession
+
+    pin = os.environ["MOCK_SUPERVISOR_PIN"]
+    seen: dict[str, object] = {}
+
+    async def supervisor(controller: SessionController, session: RuntimeSession) -> None:
+        while True:
+            await asyncio.sleep(0.1)
+            req = controller.active
+            if req is None or req.status != "pending" or req.kind != "human_required":
+                continue
+            controller.decide(req.id, "take_control", "supervisor-jo")
+            while controller.state != ControlState.HUMAN:
+                await asyncio.sleep(0.05)
+            work = session.surface.page.frame(name="work")  # type: ignore[attr-defined]
+            asked = asyncio.create_task(work.evaluate("() => confirm('Discard this override?')"))
+            while controller.pending_dialog is None:
+                await asyncio.sleep(0.05)
+            d = controller.pending_dialog
+            seen["dialog"] = (d.type, d.message)
+            controller.answer_dialog(d.id, "dismiss", "supervisor-jo")
+            seen["page_got"] = await asked
+            await asyncio.sleep(1.2)
+            box, _, _ = await session.surface.resolve(
+                ["frame:work"], [{"kind": "label", "role": "textbox", "label": "Supervisor PIN:"}]
+            )
+            assert box is not None
+            await box.element.type(pin, delay=30)
+            ok, _, _ = await session.surface.resolve(
+                ["frame:work"], [{"kind": "role_name", "role": "button", "name": "Approve"}]
+            )
+            assert ok is not None
+            await ok.element.click()
+            await asyncio.sleep(1.0)
+            controller.decide(req.id, "hand_back", "supervisor-jo", "kept the override, entered the PIN")
+            return
+
+    r = await run_replay(
+        share_cap,
+        tenant_id="pinecrest",
+        inputs={**BASE, "initial_deposit": "7500.00", "nickname": "Trip fund"},
+        approve=True,
+        operator="scripted",
+        operator_hook=supervisor,
+        runs_root=tmp_path,
+    )
+    assert seen["dialog"] == ("confirm", "Discard this override?")
+    assert seen["page_got"] is False  # the person dismissed it; automation did not accept it for them
+    assert r.status == "succeeded" and r.side_effect == "committed"
+    events = (Path(r.evidence_dir or "") / "events.jsonl").read_text()
+    assert '"type": "dialog_relayed"' in events and '"decision": "dismiss"' in events

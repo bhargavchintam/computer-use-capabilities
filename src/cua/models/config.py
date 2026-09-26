@@ -4,9 +4,10 @@
   (auth procedure, runtime detectors, message catalog, sensitive labels, risk
   rules, timeouts). Written once per product by an engineer.
 * ``Overlay``: vendor-version patches (re-target, never re-route) shared by all
-  tenants on that release.
+  tenants on that release. Reviewed and approved like capabilities: what runs on a
+  production tenant is an approved capability plus approved overlays.
 * ``TenantConfig``: one institution: base URL, product version, environment,
-  secret references, policy, overlays.
+  secret references, policy.
 * ``Policy``: the allowlist and commit rules.
 """
 
@@ -16,7 +17,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from .capability import Action, OutcomeDetector, Step
+from .capability import Action, Approval, OutcomeDetector, Step, sha256_of
 from .common import Container, Strict
 from .conditions import Condition
 from .targets import Target
@@ -101,6 +102,7 @@ class AppProfile(Strict):
     product: str
     profile_version: str
     description: str
+    surface: Literal["web", "desktop", "pixel"] = "web"  # how this product is perceived and driven
     versions_supported: str
     home_route: str  # where a signed-on operator lands; entry point for capabilities
     version_probe: VersionProbe
@@ -138,7 +140,6 @@ class TenantConfig(Strict):
     base_url: str
     secrets: dict[str, str]  # name -> "env:VAR"
     policy: str
-    overlays: list[str] = Field(default_factory=list)
 
 
 class StepPatch(Strict):
@@ -163,7 +164,19 @@ class AppliesTo(Strict):
 
 class Overlay(Strict):
     id: str
+    status: Literal["draft", "approved"] = "draft"
     description: str
     applies_to: AppliesTo
     capabilities: dict[str, CapabilityPatch] = Field(default_factory=dict)
     labels: dict[str, dict[str, str]] = Field(default_factory=dict)  # input -> {value: UI label}
+    approval: Approval | None = None
+
+    def content_sha256(self) -> str:
+        return sha256_of(self.model_dump(mode="json", exclude_none=True, exclude={"status", "approval"}))
+
+    def approval_valid(self) -> bool:
+        return (
+            self.status == "approved"
+            and self.approval is not None
+            and self.approval.content_sha256 == self.content_sha256()
+        )

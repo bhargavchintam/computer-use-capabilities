@@ -35,6 +35,11 @@ class DecisionBody(BaseModel):
     note: str | None = None
 
 
+class DialogBody(BaseModel):
+    decision: str
+    operator: str
+
+
 class OperatorConsole:
     def __init__(self, controller: SessionController, recorder: RunRecorder, *, port: int = 8765) -> None:
         self.controller = controller
@@ -66,6 +71,7 @@ class OperatorConsole:
                     "control": {"state": c.state.value, "holder": c.holder, "epoch": c.epoch},
                     "interventions": [r.model_dump(mode="json") for r in reqs],
                     "live_human_actions": live,
+                    "pending_dialog": c.pending_dialog.view() if c.pending_dialog else None,
                 }
             )
 
@@ -89,6 +95,11 @@ class OperatorConsole:
             )
             return JSONResponse({"ok": ok, "detail": msg}, status_code=200 if ok else 409)
 
+        @app.post("/api/dialogs/{did}")
+        async def answer_dialog(did: str, body: DialogBody) -> JSONResponse:
+            ok, msg = c.answer_dialog(did, body.decision, body.operator.strip() or "operator")
+            return JSONResponse({"ok": ok, "detail": msg}, status_code=200 if ok else 409)
+
         return app
 
     async def start(self) -> None:
@@ -98,9 +109,12 @@ class OperatorConsole:
         self._server = _EmbeddedServer(config)
         self._task = asyncio.create_task(self._server.serve())
         for _ in range(100):
-            if self._server.started:
+            if self._server.started or self._task.done():
                 break
             await asyncio.sleep(0.05)
+        if not self._server.started:  # e.g. the port is taken: an operator could never answer
+            self._server.should_exit = True
+            raise RuntimeError(f"the operator console could not start on {self.url} (port in use?)")
         self.recorder.event("operator_console_started", url=self.url)
         print(f"\n  Operator console: {self.url}\n", flush=True)
 
@@ -166,6 +180,19 @@ function buttons(iv, control) {
   }
   return b.join("");
 }
+async function answerDialog(id, decision) {
+  const operator = $("#op").value.trim() || "operator";
+  const r = await fetch(`/api/dialogs/${id}`, {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({decision, operator})});
+  const j = await r.json(); if (!j.ok) alert(j.detail); last = ""; refresh();
+}
+function dialogCard(d) {
+  return `<div class="card"><div><span class="chip kind-human_required">page dialog</span><span class="muted">${esc(d.id)}</span></div>
+    <h3 style="margin:8px 0 4px">The page opened a ${esc(d.type)} dialog while you hold the session</h3>
+    <pre>${esc(d.message)}</pre>
+    <button class="primary" onclick="answerDialog('${d.id}','accept')">Accept (OK)</button>
+    <button onclick="answerDialog('${d.id}','dismiss')">Dismiss (Cancel)</button></div>`;
+}
 function card(iv, control, live) {
   const actions = (iv.status === "active" ? live : iv.human_actions) || [];
   return `<div class="card"><div class="row"><div class="col">
@@ -187,11 +214,13 @@ async function refresh() {
     $("#run").textContent = "Run " + s.run_id;
     $("#dot").className = "dot " + s.control.state;
     $("#lease").textContent = `${s.control.state.replace("_", " ")} · holder: ${s.control.holder} · epoch ${s.control.epoch}`;
-    const key = JSON.stringify([s.control, s.interventions.map(i => [i.id, i.status]), s.live_human_actions.length]);
+    const key = JSON.stringify([s.control, s.interventions.map(i => [i.id, i.status]), s.live_human_actions.length,
+      s.pending_dialog && s.pending_dialog.id]);
     if (key !== last) {
       last = key;
-      $("#list").innerHTML = s.interventions.length ? s.interventions.map(i => card(i, s.control, s.live_human_actions)).join("")
-        : '<div class="empty">No interventions yet. Automation is running.</div>';
+      const dialog = s.pending_dialog ? dialogCard(s.pending_dialog) : "";
+      $("#list").innerHTML = dialog + (s.interventions.length ? s.interventions.map(i => card(i, s.control, s.live_human_actions)).join("")
+        : '<div class="empty">No interventions yet. Automation is running.</div>');
     }
   } catch (e) { $("#run").textContent = "runner finished or unreachable"; }
 }

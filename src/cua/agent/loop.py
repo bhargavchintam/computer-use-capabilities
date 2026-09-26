@@ -28,7 +28,7 @@ from ..policy import PolicyEngine
 from ..redaction import Redactor
 from ..replay import parse_value
 from ..runtime import RuntimeGuard, RuntimeSession
-from ..surface.base import NotReady, PageSnapshot, SessionLost, StaleRef
+from ..surface.base import ActionFailed, NotReady, PageSnapshot, SessionLost, StaleRef
 from ..trace import PageState, TraceStep
 from .llm import LLMClient, LLMTurn
 from .prompts import SYSTEM, goal_message
@@ -118,6 +118,7 @@ class DiscoveryAgent:
         self.final: AgentOutcome | None = None
         self.commit_approved_by: str | None = None
         self.committed = False
+        self._acting: TraceStep | None = None  # the agent step whose aftermath is being settled
         # stuck detection
         self.consecutive_errors = 0
         self.policy_denials = 0
@@ -314,13 +315,28 @@ class DiscoveryAgent:
         except SessionLost as e:
             self._finish("failed", code="SESSION_LOST", message=str(e))
             return ToolResult([{"type": "text", "text": "The session was lost."}], True)
+        except ActionFailed as e:
+            return await self._error(f"could not perform {name}: {e}", fresh=True)
+        except Exception as e:  # noqa: BLE001 - one surprise must not end the run; report it to the model
+            self.recorder.event(
+                "tool_exception",
+                tool=name,
+                error=type(e).__name__,
+                detail=self.redactor.scrub_text(str(e))[:300],
+            )
+            return await self._error(
+                f"the {name} action failed unexpectedly ({type(e).__name__}); observe and try another way",
+                fresh=True,
+            )
 
     async def _error(self, message: str, *, fresh: bool = False) -> ToolResult:
         self.consecutive_errors += 1
         self.recorder.event("tool_error", message=self.redactor.scrub_text(message))
         blocks: list[dict[str, Any]] = [{"type": "text", "text": f"Error: {message}"}]
         if fresh:
-            blocks += await self.observe()
+            blocks += await self._when_ready(self.observe) or [
+                {"type": "text", "text": "(page still loading)"}
+            ]
         return ToolResult(blocks, True)
 
     # ------------------------------------------------------------------ interactions
@@ -354,7 +370,7 @@ class DiscoveryAgent:
     ) -> ToolResult:
         assert self.snap is not None
         ref = a.get("ref", "")
-        _, el = await self.surface.element_for_ref(self.snap, ref)
+        container, el = await self.surface.element_for_ref(self.snap, ref)
         d = await self.surface.describe(el)
         control = d.get("control") or {}
         allowed = self.policy.action_allowed(action)
@@ -379,22 +395,23 @@ class DiscoveryAgent:
             approved_by = decision
         before = await self._state()
         baseline = await self.session.red_baseline()
-        container = list(self.surface.container_of(await self._frame_of(ref)))
-        async with self.controller.automated_action(self.obs_epoch):
-            if action == "click":
-                await self.surface.click(el)
-            elif action == "fill":
-                await self.surface.fill(el, value or "")
-            elif action == "select":
-                await self.surface.select(el, value or "")
-            else:
-                await self.surface.press(el, key or "Enter")
+        try:
+            async with self.controller.automated_action(self.obs_epoch):
+                if action == "click":
+                    await self.surface.click(el)
+                elif action == "fill":
+                    await self.surface.fill(el, value or "")
+                elif action == "select":
+                    await self.surface.select(el, value or "")
+                else:
+                    await self.surface.press(el, key or "Enter")
+        except ActionFailed as e:
+            if effect == "commit" and not e.before_dispatch:
+                self.committed = True  # it may have gone through: never re-drive past it
+            raise
         if effect == "commit":
             self.committed = True
-        # The action happened: from here on it is always recorded, even if the page is slow to settle.
-        notes = await self._when_ready(lambda: self._settle_and_guard(baseline)) or []
-        blocks = await self._when_ready(self.observe) or [{"type": "text", "text": "(page still loading)"}]
-        after = await self._when_ready(self._state)
+        # The action happened: record it now, ahead of any interruption or human step that follows it.
         step = TraceStep(
             index=len(self.trace),
             actor="agent",
@@ -406,12 +423,21 @@ class DiscoveryAgent:
             value_text=text,
             key=key,
             before=before,
-            after=after,
             approved_by=approved_by,
         )
         self.trace.append(step)
+        self._acting = step
+        try:
+            notes = await self._when_ready(lambda: self._settle_and_guard(baseline)) or []
+            blocks = await self._when_ready(self.observe) or [
+                {"type": "text", "text": "(page still loading)"}
+            ]
+            if step.after is None:  # nobody took over after the action
+                step.after = await self._when_ready(self._state)
+        finally:
+            self._acting = None
         self.recorder.event("step_grounded", **step.summary())
-        self._track_progress(action, d, before, after)
+        self._track_progress(action, d, before, step.after)
         head = "Done." + (" " + " ".join(notes) if notes else "")
         return ToolResult([{"type": "text", "text": head}, *blocks])
 
@@ -423,11 +449,6 @@ class DiscoveryAgent:
             except NotReady:
                 await asyncio.sleep(0.2)
         return None
-
-    async def _frame_of(self, ref: str) -> Any:
-        assert self.snap is not None
-        container, _ = self.snap.ref_index[ref]
-        return self.surface.frame_for(list(container))
 
     async def _approve_commit(self, control: dict[str, Any], a: dict[str, Any]) -> str | ToolResult:
         what = f'{control.get("role")} "{control.get("name")}"'
@@ -496,6 +517,8 @@ class DiscoveryAgent:
                 notes.append(f"(The application keeps failing: {hit.message}.)")
                 break
             if hit.kind == "human_required":
+                if self._acting is not None and self._acting.after is None:
+                    self._acting.after = await self._state()  # where the agent's action led
                 handoff = await self.controller.escalate(
                     kind="human_required",
                     reason=hit.message,
@@ -521,12 +544,10 @@ class DiscoveryAgent:
         spec = self.spec.outputs.get(name)
         if spec is None:
             return await self._error(f"{name!r} is not a requested output")
-        frame, el = await self.surface.element_for_ref(self.snap, a.get("ref", ""))
-        container = self.surface.container_of(frame)
+        container, el = await self.surface.element_for_ref(self.snap, a.get("ref", ""))
         columns: dict[str, str] | None = None
         if spec.type == "table":
-            handle = await el.evaluate_handle("(e) => e.tagName === 'TABLE' ? e : e.closest('table')")
-            table = handle.as_element()
+            table = await self.surface.table_of(el)
             if table is None:
                 return await self._error("point at the table (or any cell of it) for a list output")
             el = table
@@ -639,10 +660,10 @@ class DiscoveryAgent:
         missing = [o for o in self.spec.outputs if o not in self.outputs]
         if missing:
             return await self._error(f"outputs not recorded yet: {missing}")
-        frame, el = await self.surface.element_for_ref(self.snap, a.get("success_ref", ""))
+        where, el = await self.surface.element_for_ref(self.snap, a.get("success_ref", ""))
         d = await self.surface.describe(el)
         state = await self._state()
-        container = tuple(self.surface.container_of(frame))
+        container = tuple(where)
         own = (await self.surface.read_text(el) or d.get("name") or "").strip()
         frame_state = state.frames.get(container)
         landmark = (
@@ -720,6 +741,7 @@ class DiscoveryAgent:
         )
         self._record(handoff)
         self.consecutive_errors = self.no_progress = self.policy_denials = 0
+        self.last_actions.clear()  # the person changed the situation; do not re-trigger on old history
         return await self._after_handoff(handoff)
 
     async def _stuck(self, reason: str, terminal: bool = False) -> None:

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -23,15 +23,33 @@ from playwright.async_api import (
     async_playwright,
 )
 from playwright.async_api import Error as PWError
+from playwright.async_api import TimeoutError as PWTimeoutError
 
-from .base import FrameSnapshot, NotReady, PageSnapshot, SessionLost, StaleRef, iter_refs
+from .base import (
+    ActionFailed,
+    DialogDecision,
+    FrameSnapshot,
+    NotReady,
+    PageSnapshot,
+    Resolution,
+    SessionLost,
+    StaleRef,
+    iter_refs,
+)
 
 BUNDLE = (Path(__file__).parent / "cu_bundle.js").read_text(encoding="utf-8")
 MASK_CSS = (
     "[data-cu-mask]{color:transparent!important;background:#2f2f2f!important;"
     "text-shadow:none!important;-webkit-text-fill-color:transparent!important;}"
 )
-_TRANSIENT = ("context was destroyed", "detached", "cannot find context", "navigat", "no frame for given id")
+_TRANSIENT = (
+    "context was destroyed",
+    "detached",
+    "not attached",
+    "cannot find context",
+    "navigat",
+    "no frame for given id",
+)
 _CLOSED = ("has been closed", "target closed", "browser has disconnected")
 
 
@@ -44,13 +62,14 @@ def _classify(e: PWError) -> Exception:
     return e
 
 
-@dataclass
-class Resolution:
-    frame: Frame
-    element: ElementHandle
-    index: int  # which strategy matched (0 = primary)
-    strategy: dict[str, Any]
-    diagnostics: list[tuple[dict[str, Any], int]]
+def _classify_action(e: PWError) -> Exception:
+    """An action either could not start (ActionFailed), raced a navigation (NotReady), or lost the session."""
+    err = _classify(e)
+    if err is e:
+        first_line = str(e).strip().splitlines()[0] if str(e).strip() else type(e).__name__
+        # Playwright times out while waiting for actionability, i.e. before any input event is sent.
+        return ActionFailed(first_line[:300], before_dispatch=isinstance(e, PWTimeoutError))
+    return err
 
 
 class WebSurface:
@@ -67,10 +86,9 @@ class WebSurface:
         self.viewport = viewport
         self.video_dir = video_dir
         # Hooks installed by the runtime.
-        self.on_dialog: Callable[[Dialog], Awaitable[None]] | None = None
+        self.on_dialog: Callable[[str, str], Awaitable[DialogDecision]] | None = None
         self.on_capture: Callable[[dict[str, Any], list[str]], None] | None = None
         self.route_guard: Callable[[str, str], bool] | None = None
-        self.blocked_requests: list[dict[str, str]] = []
         self.closed = False
         self._inflight_docs = 0
         self._last_nav = time.monotonic()
@@ -155,10 +173,11 @@ class WebSurface:
         self.closed = True
 
     async def _dialog(self, dialog: Dialog) -> None:
+        decision: DialogDecision = "dismiss"  # safe default
         if self.on_dialog:
-            await self.on_dialog(dialog)
-        else:  # safe default
-            await dialog.dismiss()
+            decision = await self.on_dialog(dialog.type, dialog.message)
+        with contextlib.suppress(PWError):
+            await (dialog.accept() if decision == "accept" else dialog.dismiss())
 
     def _capture_binding(self, source: dict[str, Any], payload: dict[str, Any]) -> None:
         if self.on_capture:
@@ -172,7 +191,6 @@ class WebSurface:
         if allowed:
             await route.continue_()
         else:
-            self.blocked_requests.append({"url": req.url, "type": req.resource_type})
             await route.abort("blockedbyclient")
 
     def settled(self, quiet_ms: int) -> bool:
@@ -180,11 +198,31 @@ class WebSurface:
 
     # ------------------------------------------------------------------ frames
     @staticmethod
-    def container_of(frame: Frame) -> list[str]:
+    def _frame_key(f: Frame) -> str:
+        """frame:<name> for named frames (framesets); an unnamed iframe is identified by its path,
+        plus its position among live siblings with the same path, so containers never collide."""
+        if f.name:
+            return f"frame:{f.name}"
+
+        def path(x: Frame) -> str:
+            return urlparse(x.url).path or "about:blank"
+
+        key = f"frame@{path(f)}"
+        parent = f.parent_frame
+        if parent is not None:
+            same = [
+                c for c in parent.child_frames if not c.is_detached() and not c.name and path(c) == path(f)
+            ]
+            if len(same) > 1 and f in same:
+                key += f"#{same.index(f) + 1}"
+        return key
+
+    @classmethod
+    def container_of(cls, frame: Frame) -> list[str]:
         path: list[str] = []
         f: Frame | None = frame
         while f is not None and f.parent_frame is not None:
-            path.insert(0, f"frame:{f.name}")
+            path.insert(0, cls._frame_key(f))
             f = f.parent_frame
         return path
 
@@ -302,7 +340,7 @@ class WebSurface:
         return out
 
     # ------------------------------------------------------------------ targeting
-    async def element_for_ref(self, snap: PageSnapshot, ref: str) -> tuple[Frame, ElementHandle]:
+    async def element_for_ref(self, snap: PageSnapshot, ref: str) -> tuple[list[str], ElementHandle]:
         entry = snap.ref_index.get(ref)
         if entry is None:
             raise StaleRef(f"unknown ref {ref}")
@@ -317,7 +355,7 @@ class WebSurface:
         el = handle.as_element()
         if el is None:
             raise StaleRef(f"ref {ref} no longer exists")
-        return f, el
+        return list(container), el
 
     async def resolve(
         self, container: list[str], strategies: list[dict[str, Any]]
@@ -340,7 +378,7 @@ class WebSurface:
                     raise _classify(e) from e
                 el = handle.as_element()
                 if el is not None:
-                    return Resolution(f, el, i, s, diagnostics), diagnostics, True
+                    return Resolution(el, list(container), i, s, diagnostics), diagnostics, True
         return None, diagnostics, True
 
     async def strategies_agree(self, container: list[str], a: dict[str, Any], b: dict[str, Any]) -> bool:
@@ -364,6 +402,26 @@ class WebSurface:
             return await self._eval(f, "(s) => window.__cu.nearMisses(s)", strategy) or []
         except (NotReady, PWError):
             return []
+
+    async def table_present(self, container: list[str], headers: list[str]) -> bool:
+        """Whether a data table with these headers is on the page (to tell a missing row from drift)."""
+        f = self.frame_for(container)
+        if f is None:
+            return False
+        try:
+            return bool(
+                await self._eval(f, "(h) => window.__cu.count({kind: 'table', headers: h}) > 0", headers)
+            )
+        except NotReady:
+            return False
+
+    @staticmethod
+    async def table_of(el: ElementHandle) -> ElementHandle | None:
+        try:
+            handle = await el.evaluate_handle("(e) => e.tagName === 'TABLE' ? e : e.closest('table')")
+        except PWError as e:
+            raise _classify(e) from e
+        return handle.as_element()
 
     @staticmethod
     async def describe(el: ElementHandle) -> dict[str, Any]:
@@ -389,9 +447,11 @@ class WebSurface:
     # ------------------------------------------------------------------ actions (real input events)
     async def click(self, el: ElementHandle, timeout_ms: int = 3000) -> None:
         try:
-            await el.click(timeout=timeout_ms)
+            # no_wait_after: return once the input is sent; the runtime waits for the outcome
+            # (a slow submit must not look like a click that never happened).
+            await el.click(timeout=timeout_ms, no_wait_after=True)
         except PWError as e:
-            raise _classify(e) from e
+            raise _classify_action(e) from e
         finally:
             self._last_nav = time.monotonic()  # an action may start a navigation a few ms later
 
@@ -399,7 +459,7 @@ class WebSurface:
         try:
             await el.fill(value, timeout=timeout_ms)
         except PWError as e:
-            raise _classify(e) from e
+            raise _classify_action(e) from e
         finally:
             self._last_nav = time.monotonic()  # an action may start a navigation a few ms later
 
@@ -407,15 +467,15 @@ class WebSurface:
         try:
             await el.select_option(label=label, timeout=timeout_ms)
         except PWError as e:
-            raise _classify(e) from e
+            raise _classify_action(e) from e
         finally:
             self._last_nav = time.monotonic()  # an action may start a navigation a few ms later
 
     async def press(self, el: ElementHandle, key: str, timeout_ms: int = 3000) -> None:
         try:
-            await el.press(key, timeout=timeout_ms)
+            await el.press(key, timeout=timeout_ms, no_wait_after=True)
         except PWError as e:
-            raise _classify(e) from e
+            raise _classify_action(e) from e
         finally:
             self._last_nav = time.monotonic()  # an action may start a navigation a few ms later
 
@@ -440,9 +500,11 @@ class WebSurface:
                 if f.is_detached():
                     continue
                 try:
-                    await self._eval(
-                        f, "(l) => window.__cu ? window.__cu.markSensitive(l) : 0", sensitive_labels
+                    marked = await self._eval(
+                        f, "(l) => window.__cu ? window.__cu.markSensitive(l) : -1", sensitive_labels
                     )
+                    if marked == -1:  # the masking script is missing: never take an unmasked image
+                        return None
                     if sensitive_values:
                         rects = await self._eval(
                             f, "(v) => window.__cu ? window.__cu.valueRects(v) : []", sensitive_values

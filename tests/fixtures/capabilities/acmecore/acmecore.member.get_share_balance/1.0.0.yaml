@@ -33,7 +33,10 @@ contract:
       caller_guidance: Ask the user to double-check the member number. Safe to retry with a corrected number.
     ACCOUNT_RESTRICTED:
       description: The member record is restricted (e.g. an employee account) for this operator.
-      caller_guidance: Do not retry automatically. Route the request to staff with supervisor access.
+      caller_guidance: Retrying will not help; route the request to staff with supervisor access.
+    OUTPUT_NOT_PRESENT:
+      description: The record has no entry for a requested value (no row with the recorded key).
+      caller_guidance: Tell the user the record has no such entry. This is an answer, not an error.
     INPUT_REJECTED_BY_APP:
       description: The application rejected the member number format.
       caller_guidance: Correct the member number (digits only) and retry.

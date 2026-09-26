@@ -61,11 +61,20 @@ def test_caller_view_is_the_result_contract_without_evidence_plumbing() -> None:
         tenant="pinecrest",
         status="failed",
         started_at="2026-09-25T00:00:00Z",
-        error=FailureInfo(code="APP_ERROR", message="server error", retryable=True, evidence=["shot.png"]),
+        error=FailureInfo(code="APP_ERROR", message="server error", transient=True, evidence=["shot.png"]),
         side_effect="none",
         evidence_dir="/tmp/x",
     )
     view = caller_view(r)
-    assert view["error"] == {"code": "APP_ERROR", "message": "server error", "retryable": True}
+    assert view["error"] == {"code": "APP_ERROR", "message": "server error", "transient": True}
     assert view["side_effect"] == "none" and view["retry_safe"] is True
     assert "evidence_dir" not in view and "steps" not in view
+
+
+def test_a_bare_id_means_the_newest_approved_version(tmp_path: Path) -> None:
+    reg = Registry(tmp_path)
+    read = load_fixture(READ)
+    reg.save(approved(read))
+    reg.save(read.model_copy(update={"version": "1.1.0"}))  # newer, still a draft
+    assert reg.get(READ).version == "1.0.0"
+    assert reg.get(f"{READ}@1.1.0").status == "draft"

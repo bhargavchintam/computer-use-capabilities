@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -14,8 +15,8 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from .configio import load_model, load_tenant, model_to_yaml, repo_root
-from .models import Capability, GoalSpec, RunResult
+from .configio import config_dir, load_model, load_overlays, load_tenant, model_to_yaml, repo_root
+from .models import Approval, Capability, GoalSpec, Overlay, RunResult
 from .registry import NotFound, Registry
 from .replay import OperatorMode
 
@@ -27,8 +28,12 @@ caps_app = typer.Typer(no_args_is_help=True, help="Inspect, validate and approve
 catalog_app = typer.Typer(
     no_args_is_help=True, help="Approved capabilities as typed tools for a calling agent."
 )
+overlays_app = typer.Typer(
+    no_args_is_help=True, help="Vendor-version overlays: list and approve (reviewed like capabilities)."
+)
 app.add_typer(mock_app, name="mock")
 app.add_typer(caps_app, name="capabilities")
+app.add_typer(overlays_app, name="overlays")
 app.add_typer(catalog_app, name="catalog")
 console = Console()
 
@@ -169,24 +174,28 @@ def discover(
     video: bool = False,
 ) -> None:
     """Run the LLM on a goal, compile the run into a capability, verify it by replay, and save a draft."""
-    from .discovery import run_discovery
+    from .discovery import DiscoveryRefused, run_discovery
 
     if not (goal or spec):
         raise typer.BadParameter("give --goal or --spec")
     goal_spec = load_model(spec, GoalSpec) if spec else None
-    report = asyncio.run(
-        run_discovery(
-            tenant_id=tenant,
-            goal=goal,
-            spec=goal_spec,
-            verify_inputs=_kv(verify_input),
-            headed=headed or None,  # default: headed only when an operator may take over
-            operator=_operator(operator),
-            max_turns=max_turns,
-            vision=not no_vision,
-            record_video=video,
+    try:
+        report = asyncio.run(
+            run_discovery(
+                tenant_id=tenant,
+                goal=goal,
+                spec=goal_spec,
+                verify_inputs=_kv(verify_input),
+                headed=headed or None,  # default: headed only when an operator may take over
+                operator=_operator(operator),
+                max_turns=max_turns,
+                vision=not no_vision,
+                record_video=video,
+            )
         )
-    )
+    except DiscoveryRefused as e:
+        console.print(f"[bold red]DISCOVERY REFUSED[/] {e}")
+        raise typer.Exit(2) from None
     colour = "green" if report.status == "succeeded" and report.capability else "red"
     console.print(
         f"\n[bold {colour}]DISCOVERY {report.status.upper()}[/] {report.code or ''} {report.message or ''}"
@@ -252,11 +261,63 @@ def caps_approve(ref: str, reviewer: Annotated[str, typer.Option(help="who revie
 
 
 @caps_app.command("schema")
-def caps_schema(out: Path = Path("schemas/capability.schema.json")) -> None:
-    """Export the artifact's JSON Schema (for reviewers, editors and calling agents)."""
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(Capability.model_json_schema(), indent=2) + "\n", encoding="utf-8")
-    console.print(f"wrote {out}")
+def caps_schema(out_dir: Path = Path("schemas")) -> None:
+    """Export JSON Schemas: the capability artifact, and the result contract every run returns."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, schema in (
+        ("capability.schema.json", Capability.model_json_schema()),
+        ("run_result.schema.json", RunResult.model_json_schema(mode="serialization")),
+    ):
+        (out_dir / name).write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+        console.print(f"wrote {out_dir / name}")
+
+
+# ---------------------------------------------------------------------------------- overlays
+
+
+def _overlay_path(overlay_id: str) -> Path:
+    for path in sorted((config_dir() / "overlays").glob("*.yaml")):
+        if load_model(path, Overlay).id == overlay_id:
+            return path
+    raise typer.BadParameter(f"no overlay {overlay_id!r} in config/overlays")
+
+
+@overlays_app.command("list")
+def overlays_list() -> None:
+    t = Table("overlay", "applies to", "status", "patches", "approved by")
+    for ov in load_overlays():
+        status = ov.status + ("" if ov.status != "approved" or ov.approval_valid() else " (EDITED)")
+        t.add_row(
+            ov.id,
+            f"{ov.applies_to.product} {ov.applies_to.versions}",
+            status,
+            ", ".join(ov.capabilities) or "-",
+            ov.approval.approved_by if ov.approval else "",
+        )
+    console.print(t)
+
+
+@overlays_app.command("approve")
+def overlays_approve(overlay_id: str, reviewer: Annotated[str, typer.Option(help="who reviewed it")]) -> None:
+    """Mark an overlay approved; the approval records the hash of what was reviewed."""
+    path = _overlay_path(overlay_id)
+    ov = load_model(path, Overlay)
+    approved = ov.model_copy(
+        update={
+            "status": "approved",
+            "approval": Approval(
+                approved_by=reviewer,
+                approved_at=datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                content_sha256=ov.content_sha256(),
+            ),
+        }
+    )
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    header = "".join(
+        line for line in lines[: next((i for i, x in enumerate(lines) if not x.startswith("#")), 0)]
+    )
+    path.write_text(header + model_to_yaml(approved), encoding="utf-8")
+    console.print(f"approved overlay {ov.id} by {reviewer}; content sha256 {ov.content_sha256()[:16]}…")
 
 
 # ---------------------------------------------------------------------------------- catalog
@@ -313,7 +374,9 @@ def mock_serve(
 
 @mock_app.command("fault")
 def mock_fault(
-    kind: Annotated[str, typer.Argument(help="maintenance | alert | error500 | slow | expire")],
+    kind: Annotated[
+        str, typer.Argument(help="maintenance | alert | error500 | slow | slow_response | expire")
+    ],
     tenant: Annotated[str, typer.Option(help="tenant id (config/tenants/<id>.yaml)")],
     count: int = 1,
     path: Annotated[str, typer.Option(help="only requests under this path")] = "/core/",

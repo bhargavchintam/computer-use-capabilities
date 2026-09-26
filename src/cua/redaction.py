@@ -8,8 +8,11 @@ they cannot be re-matched by a later pass.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
 import re
+import secrets
 from typing import Any
 
 SSN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
@@ -41,8 +44,14 @@ def money_shape(text: str) -> str:
     return re.sub(r"\d", "#", text)
 
 
+# Keyed, so a logged digest of a low-entropy value (a balance) cannot be reversed by guessing.
+# Set CUA_EVIDENCE_KEY to compare digests across processes; otherwise the key is per process.
+_DIGEST_KEY = os.environ.get("CUA_EVIDENCE_KEY", "").encode() or secrets.token_bytes(32)
+
+
 def digest(value: Any) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()[:12]
+    data = json.dumps(value, sort_keys=True, default=str).encode()
+    return hmac.new(_DIGEST_KEY, data, hashlib.sha256).hexdigest()[:12]
 
 
 class Redactor:
@@ -50,6 +59,9 @@ class Redactor:
         self._secrets: dict[str, str] = {}  # value -> name
         self._params: dict[str, tuple[str, str]] = {}  # value -> (name, sensitivity)
         self.sensitive_labels = {_norm_label(x) for x in (sensitive_labels or [])}
+        # Raw values that were masked because of their label: in memory only, so the artifact
+        # linter can refuse a capability that would still contain one (e.g. a name as a landmark).
+        self.masked_values: set[str] = set()
 
     # ------------------------------------------------------------------ registration
     def add_secret(self, name: str, value: str) -> None:
@@ -106,6 +118,8 @@ class Redactor:
     def scrub_value_for_label(self, label: str, value: str, *, for_model: bool) -> str:
         """Values next to a sensitive label ("Name:", "SSN:") are masked outright."""
         if self.label_is_sensitive(label):
+            if value and len(value.strip()) >= 3:
+                self.masked_values.add(value.strip())
             return f"<pii:{_norm_label(label).replace(' ', '_')}>"
         return self.scrub_text(value, for_model=for_model)
 

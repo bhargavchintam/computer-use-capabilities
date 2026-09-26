@@ -59,7 +59,7 @@ def classified(r: RunResult) -> dict[str, Any]:
         "recoveries": [(x.detector, x.step_id, x.action) for x in r.recoveries],
         "warnings": [(w.code, w.step_id) for w in r.warnings],
         "outputs": r.outputs,
-        "trace": r.trace_sha256,
+        "path": r.path_sha256,
     }
 
 

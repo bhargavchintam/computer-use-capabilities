@@ -16,6 +16,7 @@ from typing import Any, Protocol
 
 DEFAULT_MODEL = "claude-opus-5"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+SYSTEM_MESSAGE_MODELS = ("claude-opus-5", "claude-opus-4-8", "claude-fable-5", "claude-mythos-5")
 
 
 @dataclass
@@ -57,8 +58,8 @@ class AnthropicLLM:
         self.effort = effort
         self.max_tokens = max_tokens
         self.client = anthropic_client()
-        # Mid-conversation system messages: Opus/Fable family, not Sonnet 5.
-        self.supports_system_messages = "sonnet" not in self.model and "haiku" not in self.model
+        # Mid-conversation role:"system" messages are model-gated; others get notes as user text.
+        self.supports_system_messages = self.model.startswith(SYSTEM_MESSAGE_MODELS)
 
     def _fallback_kwargs(self) -> dict[str, Any]:
         if self.model.startswith(("claude-opus-5", "claude-fable")):

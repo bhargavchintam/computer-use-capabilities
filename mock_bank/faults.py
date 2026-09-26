@@ -10,7 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-FaultKind = Literal["maintenance", "alert", "error500", "slow", "expire"]
+# slow: wait before handling the request; slow_response: handle it (e.g. commit), then answer late,
+# which is what a lost or very slow response looks like from the browser.
+FaultKind = Literal["maintenance", "alert", "error500", "slow", "slow_response", "expire"]
 
 
 @dataclass

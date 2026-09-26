@@ -69,11 +69,30 @@ class OutputSpec(Strict):
 
 
 class OutcomeSpec(Strict):
-    """A legitimate business result the caller must handle (not an error)."""
+    """A legitimate business result the caller must handle (not an error).
+
+    ``retry_safe`` says whether calling again with the same inputs could apply a change
+    twice (false e.g. when the app reports an earlier submission may have gone through).
+    Whether a retry would *help* is what ``caller_guidance`` is for.
+    """
 
     description: str
     caller_guidance: str
     retry_safe: bool = True
+
+
+# Outcomes the replay engine itself can return; a capability that can produce one must declare it,
+# so a calling agent sees every answer it can get in the contract.
+ENGINE_OUTCOMES: dict[str, OutcomeSpec] = {
+    "APPROVAL_DENIED": OutcomeSpec(
+        description="A human operator declined the commit step; nothing was committed.",
+        caller_guidance="Tell the user staff declined the request. Do not retry without new instructions.",
+    ),
+    "OUTPUT_NOT_PRESENT": OutcomeSpec(
+        description="The record has no entry for a requested value (no row with the recorded key).",
+        caller_guidance="Tell the user the record has no such entry. This is an answer, not an error.",
+    ),
+}
 
 
 class CallExample(Strict):
@@ -147,7 +166,16 @@ class Step(Strict):
             raise ValueError(f"step {self.id}: only click/press_key can commit")
         if a in ("extract", "extract_table") and self.effect != "read":
             raise ValueError(f"step {self.id}: extraction is always effect=read")
+        if self.pre and self.effect != "commit":
+            raise ValueError(f"step {self.id}: pre-checks guard commit steps only")
         return self
+
+    @property
+    def keyed_extract(self) -> bool:
+        """An extract located by a row key: a missing row is data (OUTPUT_NOT_PRESENT), not drift."""
+        from .targets import TableCell
+
+        return self.action == "extract" and any(isinstance(t, TableCell) for t in self.target.strategies)
 
 
 class AppBinding(Strict):
@@ -269,6 +297,14 @@ class Capability(Strict):
         commits = any(s.effect == "commit" for s in steps)
         if commits != (self.contract.effects == "commit"):
             raise ValueError("contract.effects must be 'commit' exactly when a step commits")
+        for code, needed in (
+            ("APPROVAL_DENIED", commits),
+            ("OUTPUT_NOT_PRESENT", any(s.keyed_extract for s in steps)),
+        ):
+            if needed and code not in self.contract.outcomes:
+                raise ValueError(
+                    f"the engine can return {code} for this flow; declare it in contract.outcomes"
+                )
         condition_kind(self.implementation.success)
         return self
 

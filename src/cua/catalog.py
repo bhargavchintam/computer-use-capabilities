@@ -87,7 +87,7 @@ def caller_view(r: RunResult) -> dict[str, Any]:
         "status": r.status,
         "outputs": r.outputs,
         "outcome": r.outcome.model_dump(exclude_none=True) if r.outcome else None,
-        "error": {"code": r.error.code, "message": r.error.message, "retryable": r.error.retryable}
+        "error": {"code": r.error.code, "message": r.error.message, "transient": r.error.transient}
         if r.error
         else None,
         "side_effect": r.side_effect,

@@ -16,6 +16,7 @@ class FrameState:
     doc_id: str
     emph: list[str]  # bold/large texts: titles, section headers
     text: str  # full visible text (in memory only; never persisted raw)
+    fields: list[tuple[str, str]] = field(default_factory=list)  # label/value pairs (memory only)
 
     @property
     def title(self) -> str:
@@ -30,7 +31,14 @@ class PageState:
     def from_probe(cls, states: dict[tuple[str, ...], dict[str, Any]]) -> PageState:
         return cls(
             {
-                c: FrameState(c, s["url_path"], s["doc_id"], list(s["emph"]), s["text"])
+                c: FrameState(
+                    c,
+                    s["url_path"],
+                    s["doc_id"],
+                    list(s["emph"]),
+                    s["text"],
+                    [(str(a), str(b)) for a, b in s.get("fields") or []],
+                )
                 for c, s in states.items()
             }
         )

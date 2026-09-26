@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from .models import AppProfile, Capability, Effect, Policy, TenantConfig
+from .models import AppProfile, Capability, Effect, Overlay, Policy, TenantConfig
 
 _EFFECT_RANK = {"read": 0, "input": 1, "commit": 2}
 CommitGate = Literal["allow", "needs_approval", "deny"]
@@ -95,29 +95,40 @@ class PolicyEngine:
                 name = (control.get("name") or "").strip()
                 if name and self._commit_name.search(name):
                     effect = "commit"
+                # Anything that can send a commit form counts, not only a native submit: a button
+                # that submits by script, or Enter in any field of that form.
                 action_path = control.get("form_action") or ""
-                if control.get("submits") and any(
-                    fnmatch.fnmatch(action_path, p) for p in self._commit_routes
+                in_commit_form = bool(action_path) and self._is_commit_route(action_path)
+                if in_commit_form and (
+                    control.get("submits")
+                    or control.get("role") in ("button", "clickable")
+                    or action == "press_key"
                 ):
                     effect = "commit"
-                if (
-                    action == "press_key"
-                    and control.get("form_action")
-                    and any(fnmatch.fnmatch(action_path, p) for p in self._commit_routes)
-                ):
+                # A link that goes straight to a commit route commits too.
+                href = control.get("href") or ""
+                if href and self._is_commit_route(href):
                     effect = "commit"
         if recorded and _EFFECT_RANK[recorded] > _EFFECT_RANK[effect]:
             return recorded
         return effect
 
-    def commit_gate(self, *, invocation_approved: bool) -> CommitGate:
+    def _is_commit_route(self, path: str) -> bool:
+        return any(fnmatch.fnmatch(path, p) for p in self._commit_routes)
+
+    def commit_gate(self, *, approved: bool) -> CommitGate:
+        """May a commit step act now? `approved` is an invocation-level or operator approval."""
         if not self.policy.commit.require_approval:
             return "allow"
-        return "allow" if invocation_approved else "needs_approval"
+        return "allow" if approved else "needs_approval"
 
     # ------------------------------------------------------------------ pre-flight
-    def preflight(self, cap: Capability) -> list[tuple[str, str]]:
-        """Violations as (failure_code, message); empty means the capability may run here."""
+    def preflight(self, cap: Capability, overlays: list[Overlay] | None = None) -> list[tuple[str, str]]:
+        """Violations as (failure_code, message); empty means the capability may run here.
+
+        `overlays` are the version overlays that shape the plan that will actually run: on a
+        production tenant they must be approved too, or the approval of the base artifact would
+        not cover what executes."""
         problems: list[tuple[str, str]] = []
         for step in cap.implementation.steps:
             d = self.action_allowed(step.action)
@@ -135,4 +146,14 @@ class PolicyEngine:
             problems.append(("NOT_APPROVED", f"{cap.ref} is deprecated"))
         elif cap.status == "draft" and not commit.allow_draft_in_sandbox:
             problems.append(("NOT_APPROVED", f"{cap.ref} is a draft and drafts are not allowed here"))
+        for ov in overlays or []:
+            if ov.approval_valid():
+                continue
+            why = "edited after approval" if ov.status == "approved" else f"status is {ov.status}"
+            if self.tenant.environment == "production" and commit.production_requires_approved_capability:
+                problems.append(("NOT_APPROVED", f"overlay {ov.id} is not approved for production ({why})"))
+            elif not commit.allow_draft_in_sandbox:
+                problems.append(
+                    ("NOT_APPROVED", f"overlay {ov.id} is a draft and drafts are not allowed here")
+                )
         return problems
