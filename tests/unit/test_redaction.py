@@ -5,7 +5,7 @@ from cua.redaction import Redactor, money_shape
 
 def make() -> Redactor:
     r = Redactor(["Name", "SSN", "Date of Birth"])
-    r.add_secret("operator_password", "pc-Teller-9x41")
+    r.add_secret("operator_password", "fake-Pass-5a17")
     r.add_param("member_number", "10042", "pii_identifier")
     r.add_param("nickname", "Gift fund", "internal")
     r.add_param("initial_deposit", "7500.00", "confidential")
@@ -14,7 +14,7 @@ def make() -> Redactor:
 
 def test_secrets_are_scrubbed_everywhere() -> None:
     r = make()
-    assert "pc-Teller-9x41" not in r.scrub_text("login with pc-Teller-9x41 failed")
+    assert "fake-Pass-5a17" not in r.scrub_text("login with fake-Pass-5a17 failed")
     assert r.scrub_text("key sk-ant-api03-abcdefghijklmnop") == "key <api-key>"
 
 

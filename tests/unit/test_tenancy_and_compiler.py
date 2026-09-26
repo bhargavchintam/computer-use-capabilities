@@ -101,7 +101,7 @@ def test_landmarks_skip_data_and_numbers() -> None:
 
 def test_linter_fails_closed_on_leaks() -> None:
     cap = load_fixture("acmecore.member.get_share_balance")
-    assert lint(cap, samples={"member_number": "10042"}, secrets=["pc-Teller-9x41"]) == []
+    assert lint(cap, samples={"member_number": "10042"}, secrets=["fake-Pass-5a17"]) == []
     data = cap.model_dump(mode="json", exclude_none=True)
     data["implementation"]["steps"][2]["intent"] = "Search for 10042 whose balance is $12,450.31"
     leaky = type(cap).model_validate(data)
