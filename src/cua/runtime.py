@@ -299,6 +299,29 @@ class RuntimeGuard:
                     "UNRECOGNIZED_STATE",
                     f'unexpected {ev.type} dialog "{ev.message}" ({ev.action}ed by the safe default)',
                 )
+        known = await self._known(phase)
+        if known is not None:
+            return known
+        # Fail-safe for anything else the app printed. Only on a settled page, and only after
+        # re-checking the known conditions: the text may have rendered after the first pass.
+        if phase == "post" and baseline is not None and s.surface.settled(s.timeouts.settle_ms):
+            for container in s.app.error_region.containers:
+                now = set(await s.surface.red_texts(container))
+                new = sorted(now - baseline.get(tuple(container), set()))
+                if new:
+                    known = await self._known(phase)
+                    if known is not None:
+                        return known
+                    return Hit(
+                        "unrecognized",
+                        "error_region",
+                        "UNRECOGNIZED_STATE",
+                        s.redactor.scrub_text("; ".join(new)),
+                    )
+        return None
+
+    async def _known(self, phase: Literal["pre", "post"]) -> Hit | None:
+        s = self.session
         for det in s.app.detectors:
             if await self.checks.holds(det.when):
                 message = await self._message_for(det.when) or det.description
@@ -313,17 +336,6 @@ class RuntimeGuard:
                     return Hit(
                         "business_outcome", rule.code, rule.code, s.redactor.scrub_text(message or rule.code)
                     )
-            if baseline is not None:
-                for container in s.app.error_region.containers:
-                    now = set(await s.surface.red_texts(container))
-                    new = sorted(now - baseline.get(tuple(container), set()))
-                    if new:
-                        return Hit(
-                            "unrecognized",
-                            "error_region",
-                            "UNRECOGNIZED_STATE",
-                            s.redactor.scrub_text("; ".join(new)),
-                        )
         return None
 
     async def _message_for(self, cond: Any) -> str | None:

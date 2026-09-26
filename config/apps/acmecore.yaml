@@ -6,6 +6,7 @@ description: >-
   AcmeCore core banking (fictional vendor). Frameset UI with banner, nav and
   work frames; messages are printed as red text in the work frame.
 versions_supported: ">=7.2,<8.0"
+home_route: /core/main
 
 version_probe:
   container: ["frame:banner"]
@@ -118,42 +119,49 @@ messages:
   member_not_found:
     pattern: "(?i)no member found"
     container: ["frame:work"]
+    routes: ["/core/inquiry", "/cu/lookup", "/core/member/*"]
     outcome: MEMBER_NOT_FOUND
     description: No member exists with this member number.
     caller_guidance: Ask the user to double-check the member number. Safe to retry with a corrected number.
   member_number_invalid:
     pattern: "(?i)member # must be numeric"
     container: ["frame:work"]
+    routes: ["/core/inquiry", "/cu/lookup"]
     outcome: INPUT_REJECTED_BY_APP
     description: The application rejected the member number format.
     caller_guidance: Correct the member number (digits only) and retry.
   account_restricted:
     pattern: "(?i)access denied: this member record is restricted"
     container: ["frame:work"]
+    routes: ["/core/inquiry", "/cu/lookup", "/core/member/*"]
     outcome: ACCOUNT_RESTRICTED
     description: The member record is restricted (e.g. an employee account) for this operator.
     caller_guidance: Do not retry automatically. Route the request to staff with supervisor access.
   insufficient_funds:
     pattern: "(?i)exceeds the available balance"
     container: ["frame:work"]
+    routes: ["/core/member/*/newshare"]
     outcome: INSUFFICIENT_FUNDS
     description: The funding share does not have enough available balance.
     caller_guidance: Tell the user the available balance is too low; retry with a smaller amount.
   invalid_amount:
     pattern: "(?i)initial deposit must be a valid amount"
     container: ["frame:work"]
+    routes: ["/core/member/*/newshare"]
     outcome: INVALID_AMOUNT
     description: The application rejected the deposit amount.
     caller_guidance: Correct the amount (positive, at most two decimals) and retry.
   invalid_nickname:
     pattern: "(?i)nickname may contain letters, numbers and spaces only"
     container: ["frame:work"]
+    routes: ["/core/member/*/newshare"]
     outcome: INVALID_NICKNAME
     description: The nickname contains characters the application does not accept.
     caller_guidance: Use letters, numbers and spaces only (max 20) and retry.
   request_already_processed:
     pattern: "(?i)already been processed or has expired"
     container: ["frame:work"]
+    routes: ["/core/member/*/newshare/*"]
     outcome: REQUEST_ALREADY_PROCESSED
     description: The application refused a repeated submission.
     caller_guidance: Do not retry. Check the member's shares first; the earlier submission may have succeeded.

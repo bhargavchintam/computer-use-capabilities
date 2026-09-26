@@ -459,7 +459,12 @@
         if (items.length >= MAX_ITEMS) return;
         if (node.nodeType === 3) {
           const t = norm(node.nodeValue);
-          if (t) items.push(Object.assign({ t: 'text', text: t.slice(0, 240) }, textStyle(node.parentElement)));
+          if (t) {
+            const item = Object.assign({ t: 'text', text: t.slice(0, 240) }, textStyle(node.parentElement));
+            // Titles and red messages get refs so the model can cite them (finish / report_outcome).
+            if ((item.b || item.big || item.red) && node.parentElement) item.ref = newRef(node.parentElement);
+            items.push(item);
+          }
           continue;
         }
         if (node.nodeType !== 1) continue;
@@ -491,7 +496,7 @@
           const item = { t: 'el', ref: newRef(el), role, name: accName(el), tag, rect: rectOf(el) };
           const label = proximityLabel(el);
           if (label && normKey(label) !== normKey(item.name)) item.label = label;
-          if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+          if ((tag === 'input' || tag === 'textarea' || tag === 'select') && FORM_ROLES.has(role)) {
             item.secret = isSecretField(el);
             item.value = valueOf(el);
             if (tag === 'input') item.type = inputType(el);
@@ -516,6 +521,24 @@
       items,
       next: n,
     };
+  }
+
+  // Page identity without touching the ref registry (refs stay valid for the model).
+  function pageState() {
+    const isFrameset = !!(D.body && D.body.tagName === 'FRAMESET');
+    const emph = [];
+    if (!isFrameset && D.body) {
+      const tw = D.createTreeWalker(D.body, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = tw.nextNode()) && emph.length < 40) {
+        const t = norm(node.nodeValue);
+        const parent = node.parentElement;
+        if (!t || !parent || !isVisible(parent)) continue;
+        const st = textStyle(parent);
+        if (st.b || st.big) emph.push(t.slice(0, 120));
+      }
+    }
+    return { doc_id: DOC_ID, url: D.location.href, frameset: isFrameset, emph, text: pageText() };
   }
 
   // ------------------------------------------------------------------ page text
@@ -637,6 +660,7 @@
     describe,
     describeRef: (r) => { const el = refs.get(r); return el ? describe(el) : null; },
     pageText,
+    state: pageState,
     redTexts,
     markSensitive,
     valueRects,

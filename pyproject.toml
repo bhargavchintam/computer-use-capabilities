@@ -47,6 +47,9 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
 ignore = ["E501", "SIM108"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ASYNC110", "ASYNC240"]
+
 [tool.mypy]
 python_version = "3.12"
 packages = ["cua"]

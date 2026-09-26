@@ -63,6 +63,7 @@ class MessageRule(Strict):
     description: str
     caller_guidance: str
     retry_safe: bool = True
+    routes: list[str] = Field(default_factory=list)  # pages it can appear on (fnmatch); empty = anywhere
 
 
 class AuthProcedure(Strict):
@@ -101,6 +102,7 @@ class AppProfile(Strict):
     profile_version: str
     description: str
     versions_supported: str
+    home_route: str  # where a signed-on operator lands; entry point for capabilities
     version_probe: VersionProbe
     auth: AuthProcedure
     detectors: list[Detector]

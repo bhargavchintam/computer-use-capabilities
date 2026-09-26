@@ -273,6 +273,21 @@ class WebSurface:
             return None
         return await self._eval(f, "() => window.__cu ? window.__cu.docId() : null")
 
+    async def page_states(self) -> dict[tuple[str, ...], dict[str, Any]]:
+        """Per-frame identity (doc nonce, path, emphasized texts, text) without resetting refs."""
+        out: dict[tuple[str, ...], dict[str, Any]] = {}
+        for f in list(self.page.frames):
+            if f.is_detached():
+                continue
+            try:
+                st = await self._eval(f, "() => window.__cu ? window.__cu.state() : null")
+            except NotReady:
+                continue
+            if st and not st["frameset"]:
+                st["url_path"] = urlparse(st["url"]).path
+                out[tuple(self.container_of(f))] = st
+        return out
+
     async def doc_ids(self) -> dict[tuple[str, ...], str]:
         out: dict[tuple[str, ...], str] = {}
         for f in list(self.page.frames):

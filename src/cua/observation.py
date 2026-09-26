@@ -35,9 +35,10 @@ def _item(it: dict[str, Any], redactor: Redactor, scrub: Any, for_model: bool, m
     t = it["t"]
     if t == "text":
         text = scrub(it["text"])
+        ref = f"[{it['ref']}] " if it.get("ref") else ""
         if it.get("red"):
-            return [f"!! {text}"]
-        return [f"**{text}**" if (it.get("b") or it.get("big")) else text]
+            return [f"{ref}!! {text}"]
+        return [f"{ref}**{text}**" if (it.get("b") or it.get("big")) else text]
     if t == "el":
         parts = [f"[{it['ref']}] {it['role']}"]
         if it.get("name"):

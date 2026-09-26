@@ -77,7 +77,11 @@ def load_app_profile(product: str) -> AppProfile:
 
 
 def load_tenant(tenant_id: str) -> TenantConfig:
-    return load_model(config_dir() / "tenants" / f"{tenant_id}.yaml", TenantConfig)
+    tenant = load_model(config_dir() / "tenants" / f"{tenant_id}.yaml", TenantConfig)
+    override = os.environ.get(
+        f"CUA_TENANT_{tenant_id.upper()}_BASE_URL"
+    )  # deploy/test-time endpoint override
+    return tenant.model_copy(update={"base_url": override}) if override else tenant
 
 
 def load_policy(policy_id: str) -> Policy:
