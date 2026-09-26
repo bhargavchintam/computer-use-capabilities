@@ -1,0 +1,6 @@
+{% extends "work_base.html" %}
+{% block content %}
+<FONT SIZE="4" COLOR="#1f3a5f"><B>{{ title }}</B></FONT><BR><BR>
+{% if red %}<FONT COLOR="red"><B>{{ text }}</B></FONT>{% else %}{{ text }}{% endif %}<BR><BR>
+{% if back_href %}<A HREF="{{ back_href }}" ID="{{ rid() }}">{{ back_label }}</A>{% endif %}
+{% endblock %}

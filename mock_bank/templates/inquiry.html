@@ -1,0 +1,19 @@
+{% extends "work_base.html" %}
+{% block content %}
+<FONT SIZE="4" COLOR="#1f3a5f"><B>{{ t.inquiry_label }}</B></FONT><BR><BR>
+{% if error %}<FONT COLOR="red"><B>{{ error }}</B></FONT><BR><BR>{% endif %}
+<FORM METHOD="POST" ACTION="{{ t.inquiry_path }}" ID="{{ rid() }}">
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="0" ID="{{ rid() }}">
+<TR><TD CLASS="lbl">Member #:</TD><TD><INPUT TYPE="text" NAME="txtMbr" ID="{{ rid() }}" SIZE="10" MAXLENGTH="10" VALUE="{{ mbr }}"></TD></TR>
+<TR><TD CLASS="lbl">Last Name:</TD><TD><INPUT TYPE="text" NAME="txtLName" ID="{{ rid() }}" SIZE="20" VALUE="{{ lname }}"></TD></TR>
+<TR><TD></TD><TD><INPUT TYPE="submit" NAME="btnSrch" ID="{{ rid() }}" VALUE="{{ t.search_label }}">&nbsp;<INPUT TYPE="reset" ID="{{ rid() }}" VALUE="Clear"></TD></TR>
+</TABLE>
+</FORM>
+{% if results %}
+<BR><B>Search Results</B><BR>
+<TABLE BORDER="1" CELLPADDING="3" CELLSPACING="0" ID="{{ rid() }}">
+<TR><TD CLASS="hdr">Member #</TD><TD CLASS="hdr">Name</TD></TR>
+{% for m in results %}<TR><TD><A HREF="/core/member/{{ m.number }}" ID="{{ rid() }}">{{ m.number }}</A></TD><TD>{{ m.name }}</TD></TR>{% endfor %}
+</TABLE>
+{% endif %}
+{% endblock %}

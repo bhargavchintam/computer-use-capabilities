@@ -1,0 +1,17 @@
+{% extends "work_base.html" %}
+{% block content %}
+<FONT SIZE="4" COLOR="#1f3a5f"><B>Review New Share</B></FONT><BR><BR>
+Please review the details below and select Confirm to open the share.<BR><BR>
+<TABLE BORDER="1" CELLPADDING="3" CELLSPACING="0" ID="{{ rid() }}">
+<TR><TD CLASS="hdr">Member #:</TD><TD>{{ p.member }}</TD></TR>
+<TR><TD CLASS="hdr">Share Type:</TD><TD>{{ p.type_label }}</TD></TR>
+<TR><TD CLASS="hdr">Initial Deposit:</TD><TD>{{ p.amount_text }}</TD></TR>
+<TR><TD CLASS="hdr">Funding Source:</TD><TD>S01 PRIMARY SAVINGS</TD></TR>
+<TR><TD CLASS="hdr">Nickname:</TD><TD>{{ p.nickname }}</TD></TR>
+</TABLE>
+<BR>
+<FORM METHOD="POST" ACTION="/core/member/{{ p.member }}/newshare/confirm" ID="{{ rid() }}">
+<INPUT TYPE="hidden" NAME="tok" VALUE="{{ p.token }}">
+<INPUT TYPE="submit" NAME="btnConfirm" ID="{{ rid() }}" VALUE="Confirm">&nbsp;<INPUT TYPE="submit" NAME="btnCancel" ID="{{ rid() }}" VALUE="Cancel">
+</FORM>
+{% endblock %}

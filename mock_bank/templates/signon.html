@@ -1,0 +1,25 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD><TITLE>{{ t.display_name }} - Sign On</TITLE>
+<STYLE TYPE="text/css">BODY { font-family: Arial, Helvetica, sans-serif; font-size: 13px; background: #f4f4ec; } TD { font-size: 13px; }</STYLE>
+</HEAD>
+<BODY>
+<CENTER><BR><BR>
+<TABLE BORDER="1" CELLPADDING="10" CELLSPACING="0" BGCOLOR="white" ID="{{ rid() }}">
+<TR><TD>
+<FONT SIZE="4" COLOR="#1f3a5f"><B>{{ t.display_name }}</B></FONT><BR>
+<FONT SIZE="2">AcmeCore {{ t.version }} &nbsp;&middot;&nbsp; Operator Sign On</FONT><BR><BR>
+{% if expired %}<FONT COLOR="red">Your session has expired. Please sign on again.</FONT><BR><BR>{% endif %}
+{% if error %}<FONT COLOR="red">{{ error }}</FONT><BR><BR>{% endif %}
+<FORM METHOD="POST" ACTION="/signon" TARGET="_top" ID="{{ rid() }}">
+<TABLE BORDER="0" CELLPADDING="3" ID="{{ rid() }}">
+<TR><TD>Operator ID:</TD><TD><INPUT TYPE="text" NAME="txtOpr" ID="{{ rid() }}" SIZE="16" AUTOCOMPLETE="off"></TD></TR>
+<TR><TD>Password:</TD><TD><INPUT TYPE="password" NAME="txtPwd" ID="{{ rid() }}" SIZE="16"></TD></TR>
+<TR><TD></TD><TD><INPUT TYPE="submit" NAME="btnSignOn" ID="{{ rid() }}" VALUE="Sign On"></TD></TR>
+</TABLE>
+</FORM>
+</TD></TR>
+</TABLE>
+</CENTER>
+</BODY>
+</HTML>

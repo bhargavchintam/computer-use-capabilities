@@ -1,0 +1,32 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+<TITLE>AcmeCore</TITLE>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8">
+<STYLE TYPE="text/css">
+BODY { font-family: Arial, Helvetica, sans-serif; font-size: 13px; background: #f4f4ec; margin: 10px; }
+TD { font-size: 13px; }
+.hdr { background: #c9d3e0; font-weight: bold; }
+.lbl { text-align: right; padding-right: 6px; }
+</STYLE>
+</HEAD>
+<BODY>
+{% if maintenance %}
+<DIV ID="{{ rid() }}" STYLE="position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(40,40,40,.55);z-index:1000">
+  <DIV STYLE="position:absolute;left:50%;top:22%;transform:translateX(-50%);background:#fffbe6;border:2px solid #b58900;padding:14px;width:330px">
+    <B>System Notice</B><BR><BR>
+    Scheduled maintenance tonight from 11:00 PM to 1:00 AM ET. Some transactions may be delayed.<BR><BR>
+    <INPUT TYPE="button" ID="{{ rid() }}" VALUE="Acknowledge" onclick="this.parentNode.parentNode.style.display='none'">
+  </DIV>
+</DIV>
+{% endif %}
+<TABLE WIDTH="100%" BORDER="0" CELLPADDING="0" CELLSPACING="0" ID="{{ rid() }}">
+<TR><TD VALIGN="top">
+{% block content %}{% endblock %}
+</TD></TR>
+</TABLE>
+{% if alert_message %}
+<SCRIPT TYPE="text/javascript">alert({{ alert_message|tojson }});</SCRIPT>
+{% endif %}
+</BODY>
+</HTML>

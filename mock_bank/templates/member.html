@@ -1,0 +1,19 @@
+{% extends "work_base.html" %}
+{% block content %}
+<FONT SIZE="4" COLOR="#1f3a5f"><B>Member Summary</B></FONT><BR><BR>
+<TABLE BORDER="1" CELLPADDING="3" CELLSPACING="0" ID="{{ rid() }}">
+<TR><TD CLASS="hdr">Member #:</TD><TD>{{ m.number }}</TD><TD CLASS="hdr">SSN:</TD><TD>***-**-{{ m.ssn[-4:] }}</TD></TR>
+<TR><TD CLASS="hdr">Name:</TD><TD>{{ m.name }}</TD><TD CLASS="hdr">Date of Birth:</TD><TD>{{ m.dob }}</TD></TR>
+<TR><TD CLASS="hdr">Address:</TD><TD>{{ m.address }}</TD><TD CLASS="hdr">Phone:</TD><TD>{{ m.phone }}</TD></TR>
+</TABLE>
+<BR><B>Shares</B><BR>
+<TABLE BORDER="1" CELLPADDING="3" CELLSPACING="0" ID="{{ rid() }}">
+<TR>{% for c in t.share_columns %}<TD CLASS="hdr">{{ c }}</TD>{% endfor %}</TR>
+{% for row in share_rows %}<TR>{% for cell, align in row %}<TD{% if align %} ALIGN="right"{% endif %}>{{ cell }}</TD>{% endfor %}</TR>
+{% endfor %}
+</TABLE>
+<BR>
+<A HREF="/core/member/{{ m.number }}/newshare" ID="{{ rid() }}"><IMG SRC="/static/btn/open-new-share.svg" ALT="Open New Share" BORDER="0"></A>
+&nbsp;
+<A HREF="{{ t.inquiry_path }}" ID="{{ rid() }}"><IMG SRC="/static/btn/new-search.svg" ALT="New Search" BORDER="0"></A>
+{% endblock %}

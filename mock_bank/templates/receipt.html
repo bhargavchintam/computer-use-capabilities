@@ -1,0 +1,15 @@
+{% extends "work_base.html" %}
+{% block content %}
+<FONT SIZE="4" COLOR="#1f3a5f"><B>Share Opened</B></FONT><BR><BR>
+The new share was opened successfully.<BR><BR>
+<TABLE BORDER="1" CELLPADDING="3" CELLSPACING="0" ID="{{ rid() }}">
+<TR><TD CLASS="hdr">Confirmation #:</TD><TD>{{ r.confirmation }}</TD></TR>
+<TR><TD CLASS="hdr">Member #:</TD><TD>{{ r.member }}</TD></TR>
+<TR><TD CLASS="hdr">New Share ID:</TD><TD>{{ r.share_id }}</TD></TR>
+<TR><TD CLASS="hdr">Share Type:</TD><TD>{{ r.type_label }}</TD></TR>
+<TR><TD CLASS="hdr">Initial Deposit:</TD><TD>{{ r.amount_text }}</TD></TR>
+{% if r.supervisor %}<TR><TD CLASS="hdr">Approved By:</TD><TD>SUPERVISOR OVERRIDE</TD></TR>{% endif %}
+</TABLE>
+<BR>
+<A HREF="/core/member/{{ r.member }}" ID="{{ rid() }}"><IMG SRC="/static/btn/return-to-member.svg" ALT="Return to Member" BORDER="0"></A>
+{% endblock %}

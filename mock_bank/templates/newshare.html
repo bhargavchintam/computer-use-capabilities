@@ -1,0 +1,16 @@
+{% extends "work_base.html" %}
+{% block content %}
+<FONT SIZE="4" COLOR="#1f3a5f"><B>Open New Share</B></FONT> &nbsp; Member # {{ m.number }}<BR><BR>
+{% for e in errors %}<FONT COLOR="red"><B>{{ e }}</B></FONT><BR>{% endfor %}{% if errors %}<BR>{% endif %}
+<FORM METHOD="POST" ACTION="/core/member/{{ m.number }}/newshare" ID="{{ rid() }}">
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="0" ID="{{ rid() }}">
+<TR><TD CLASS="lbl">Share Type:</TD><TD><SELECT NAME="ddlType" ID="{{ rid() }}">
+  <OPTION VALUE="">-- Select --</OPTION>
+  {% for code, label in t.share_types.items() %}<OPTION VALUE="{{ code }}"{% if code == form.ddlType %} SELECTED{% endif %}>{{ label }}</OPTION>{% endfor %}
+</SELECT></TD></TR>
+<TR><TD CLASS="lbl">Initial Deposit:</TD><TD><INPUT TYPE="text" NAME="txtAmt" ID="{{ rid() }}" SIZE="12" VALUE="{{ form.txtAmt }}"> <FONT SIZE="1">(from S01 PRIMARY SAVINGS)</FONT></TD></TR>
+<TR><TD CLASS="lbl">Nickname:</TD><TD><INPUT TYPE="text" NAME="txtNick" ID="{{ rid() }}" SIZE="20" MAXLENGTH="20" VALUE="{{ form.txtNick }}"></TD></TR>
+<TR><TD></TD><TD><INPUT TYPE="submit" NAME="btnCont" ID="{{ rid() }}" VALUE="Continue">&nbsp;<INPUT TYPE="button" ID="{{ rid() }}" VALUE="Cancel" onclick="location.href='/core/member/{{ m.number }}'"></TD></TR>
+</TABLE>
+</FORM>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "work_base.html" %}
+{% block content %}
+<FONT SIZE="4" COLOR="#1f3a5f"><B>Supervisor Override Required</B></FONT><BR><BR>
+<FONT COLOR="red"><B>This transaction exceeds your approval limit of $5,000.00.</B></FONT><BR>
+A supervisor must enter their PIN to approve it.<BR><BR>
+{% if error %}<FONT COLOR="red"><B>{{ error }}</B></FONT><BR><BR>{% endif %}
+<FORM METHOD="POST" ACTION="/core/member/{{ p.member }}/newshare/override" ID="{{ rid() }}">
+<INPUT TYPE="hidden" NAME="tok" VALUE="{{ p.token }}">
+<TABLE BORDER="0" CELLPADDING="3" CELLSPACING="0" ID="{{ rid() }}">
+<TR><TD CLASS="lbl">Supervisor PIN:</TD><TD><INPUT TYPE="password" NAME="txtSupPin" ID="{{ rid() }}" SIZE="8"></TD></TR>
+<TR><TD></TD><TD><INPUT TYPE="submit" NAME="btnApprove" ID="{{ rid() }}" VALUE="Approve">&nbsp;<INPUT TYPE="submit" NAME="btnCancel" ID="{{ rid() }}" VALUE="Cancel"></TD></TR>
+</TABLE>
+</FORM>
+{% endblock %}
