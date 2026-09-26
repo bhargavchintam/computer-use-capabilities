@@ -192,6 +192,8 @@ def create_app(
             slow = state.faults.take("slow", path)
             if slow:
                 await asyncio.sleep(slow.delay_ms / 1000)
+            if state.faults.take("expire", path):
+                state.sessions.pop(request.cookies.get(SESSION_COOKIE, ""), None)  # session times out now
             if state.faults.take("error500", path):
                 return render("error500.html", status=500, request_id=secrets.token_hex(8))
         response: Response = await call_next(request)

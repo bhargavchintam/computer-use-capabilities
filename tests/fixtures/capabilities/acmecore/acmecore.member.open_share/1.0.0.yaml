@@ -1,0 +1,227 @@
+# HAND-WRITTEN TEST FIXTURE (source: author) for the write flow: commit gating,
+# pre-commit checks, the supervisor-PIN handoff and side-effect reporting.
+schema_version: "1.0"
+id: acmecore.member.open_share
+version: 1.0.0
+status: draft
+title: Open a new share for a member
+description: >-
+  Finds the member, opens the New Share form, fills type, deposit and nickname,
+  reviews, confirms (commit), and returns the confirmation number and new share id.
+contract:
+  inputs:
+    member_number:
+      type: string
+      description: The member's number.
+      pattern: "^[0-9]{5}$"
+      sensitivity: pii_identifier
+    share_type:
+      type: enum
+      description: Share product to open.
+      enum: [Holiday Club, Vacation Club, 12 Month Certificate]
+      sensitivity: internal
+    initial_deposit:
+      type: money
+      description: Amount moved from PRIMARY SAVINGS into the new share.
+      pattern: '^\d+(\.\d{2})?$'
+      max_value: "25000.00"
+      sensitivity: confidential
+    nickname:
+      type: string
+      description: Nickname shown on statements (letters, numbers, spaces).
+      pattern: "^[A-Za-z0-9 ]{1,20}$"
+      sensitivity: internal
+  outputs:
+    confirmation_number:
+      type: identifier
+      description: Confirmation number printed on the receipt.
+      sensitivity: internal
+    new_share_id:
+      type: identifier
+      description: Id of the newly opened share.
+      sensitivity: internal
+  outcomes:
+    MEMBER_NOT_FOUND:
+      description: No member exists with this member number.
+      caller_guidance: Ask the user to double-check the member number. Safe to retry with a corrected number.
+    ACCOUNT_RESTRICTED:
+      description: The member record is restricted for this operator.
+      caller_guidance: Do not retry automatically. Route the request to staff with supervisor access.
+    INSUFFICIENT_FUNDS:
+      description: PRIMARY SAVINGS does not have enough available balance.
+      caller_guidance: Tell the user the available balance is too low; retry with a smaller amount.
+    INVALID_AMOUNT:
+      description: The application rejected the deposit amount.
+      caller_guidance: Correct the amount and retry.
+    INVALID_NICKNAME:
+      description: The nickname contains characters the application does not accept.
+      caller_guidance: Use letters, numbers and spaces only (max 20) and retry.
+    REQUEST_ALREADY_PROCESSED:
+      description: The application refused a repeated submission.
+      caller_guidance: Do not retry. Check the member's shares first; the earlier submission may have succeeded.
+      retry_safe: false
+  effects: commit
+  idempotent: false
+implementation:
+  app: {product: acmecore, versions: ">=7.2,<8.0", surface: web}
+  entry: {route: /core/main}
+  steps:
+    - id: click_member_inquiry
+      intent: Open Member Inquiry from the menu
+      action: click
+      effect: read
+      target:
+        container: ["frame:nav"]
+        strategies:
+          - {kind: role_name, role: link, name: Member Inquiry}
+          - {kind: attr, tag: a, attrs: {href: /core/inquiry}}
+      expect:
+        - {document_changed: {container: ["frame:work"]}}
+        - {text_visible: {container: ["frame:work"], text: Member Inquiry}}
+      provenance: author
+    - id: fill_member_number
+      intent: Enter the member number
+      action: fill
+      effect: input
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: label, role: textbox, label: "Member #:"}
+          - {kind: attr, tag: input, attrs: {name: txtMbr}}
+      value: {param: member_number}
+      expect:
+        - {field_value: {equals: {param: member_number}}}
+      provenance: author
+    - id: click_search
+      intent: Run the search
+      action: click
+      effect: read
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: role_name, role: button, name: Search}
+          - {kind: attr, tag: input, attrs: {name: btnSrch}}
+      expect:
+        - {document_changed: {container: ["frame:work"]}}
+        - {text_visible: {container: ["frame:work"], text: Member Summary}}
+      provenance: author
+    - id: click_open_new_share
+      intent: Open the New Share form
+      action: click
+      effect: read
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: role_name, role: link, name: Open New Share}
+          - {kind: attr, tag: img, attrs: {alt: Open New Share}}
+      expect:
+        - {document_changed: {container: ["frame:work"]}}
+        - {text_visible: {container: ["frame:work"], text: Open New Share}}
+      provenance: author
+    - id: select_share_type
+      intent: Choose the share type
+      action: select
+      effect: input
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: label, role: combobox, label: "Share Type:"}
+          - {kind: attr, tag: select, attrs: {name: ddlType}}
+      value: {param: share_type}
+      provenance: author
+    - id: fill_initial_deposit
+      intent: Enter the initial deposit
+      action: fill
+      effect: input
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: label, role: textbox, label: "Initial Deposit:"}
+          - {kind: attr, tag: input, attrs: {name: txtAmt}}
+      value: {param: initial_deposit}
+      expect:
+        - {field_value: {equals: {param: initial_deposit}}}
+      provenance: author
+    - id: fill_nickname
+      intent: Enter the nickname
+      action: fill
+      effect: input
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: label, role: textbox, label: "Nickname:"}
+          - {kind: attr, tag: input, attrs: {name: txtNick}}
+      value: {param: nickname}
+      expect:
+        - {field_value: {equals: {param: nickname}}}
+      provenance: author
+    - id: click_continue
+      intent: Continue to the review page
+      action: click
+      effect: read
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: role_name, role: button, name: Continue}
+          - {kind: attr, tag: input, attrs: {name: btnCont}}
+      expect:
+        - {document_changed: {container: ["frame:work"]}}
+        - {text_visible: {container: ["frame:work"], text: Review New Share}}
+      provenance: author
+    - id: click_confirm
+      intent: Confirm and open the share (commit)
+      action: click
+      effect: commit
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: role_name, role: button, name: Confirm}
+          - {kind: attr, tag: input, attrs: {name: btnConfirm}}
+      pre:
+        - {text_visible: {container: ["frame:work"], text: {param: member_number}}}
+        - {text_visible: {container: ["frame:work"], text: {param: share_type}}}
+        - {text_visible: {container: ["frame:work"], text: {param: initial_deposit}}}
+        - {text_visible: {container: ["frame:work"], text: {param: nickname}}}
+      expect:
+        - {document_changed: {container: ["frame:work"]}}
+        - {text_visible: {container: ["frame:work"], text: Share Opened}}
+      provenance: author
+    - id: extract_confirmation_number
+      intent: Read the confirmation number
+      action: extract
+      effect: read
+      output: confirmation_number
+      parse: identifier
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: label, role: cell, label: "Confirmation #:"}
+      provenance: author
+    - id: extract_new_share_id
+      intent: Read the new share id
+      action: extract
+      effect: read
+      output: new_share_id
+      parse: identifier
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: label, role: cell, label: "New Share ID:"}
+      provenance: author
+  outcome_detectors:
+    MEMBER_NOT_FOUND: {ref: member_not_found}
+    ACCOUNT_RESTRICTED: {ref: account_restricted}
+    INSUFFICIENT_FUNDS: {ref: insufficient_funds}
+    INVALID_AMOUNT: {ref: invalid_amount}
+    INVALID_NICKNAME: {ref: invalid_nickname}
+    REQUEST_ALREADY_PROCESSED: {ref: request_already_processed}
+  success:
+    all_of:
+      - {text_visible: {container: ["frame:work"], text: Share Opened}}
+      - {text_visible: {container: ["frame:work"], text: {param: member_number}}}
+      - {outputs_present: [confirmation_number, new_share_id]}
+provenance:
+  source: author
+  recorded_at: "2026-09-25T00:00:00Z"
+  notes:
+    - Hand-written test fixture; see /evidence for the discovered artifact.

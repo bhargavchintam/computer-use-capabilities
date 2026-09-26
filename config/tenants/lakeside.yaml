@@ -1,0 +1,11 @@
+id: lakeside
+display_name: Lakeside Savings Bank (demo)
+# Treated as production: only approved capabilities may run here.
+environment: production
+app: acmecore
+product_version: "7.3.1"
+base_url: http://127.0.0.1:8402
+secrets:
+  operator_id: env:LAKESIDE_OPERATOR_ID
+  operator_password: env:LAKESIDE_OPERATOR_PASSWORD
+policy: default

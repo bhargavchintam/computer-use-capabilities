@@ -1,0 +1,28 @@
+# Version overlay: applies to every tenant running AcmeCore 7.3.x (N+M, not NxM).
+# Re-targets steps by stable id; it cannot add, remove or reorder steps, and it
+# never touches a capability's contract.
+id: acmecore-7.3
+description: >-
+  AcmeCore 7.3 renamed the "Member Inquiry" menu item to "Member Lookup" and
+  moved it to /cu/lookup. (7.3 also relabelled Search to Find; the recorded
+  attribute fallback still finds it, so that step degrades with a warning
+  instead of failing, and no patch is required.)
+applies_to:
+  product: acmecore
+  versions: ">=7.3,<7.4"
+capabilities:
+  acmecore.member.get_share_balance:
+    steps:
+      click_member_inquiry:
+        target:
+          container: ["frame:nav"]
+          strategies:
+            - {kind: role_name, role: link, name: Member Lookup}
+            - {kind: attr, tag: a, attrs: {href: /cu/lookup}}
+        expect:
+          - {document_changed: {container: ["frame:work"]}}
+          - {text_visible: {container: ["frame:work"], text: Member Lookup}}
+labels:
+  # enum value -> this version's UI label (used by select steps)
+  share_type:
+    Holiday Club: Christmas Club

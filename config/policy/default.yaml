@@ -1,0 +1,18 @@
+id: default
+# Action types the automation may perform. Anything else (uploads, downloads,
+# free-form navigation, scripts) is not an action it has.
+allowed_actions: [click, fill, select, press_key, extract, extract_table]
+
+# Route allowlist, relative to the tenant's base URL (the only allowed origin).
+# "*" matches one path segment, "**" any depth.
+allow_paths: ["/signon", "/core/**", "/cu/**", "/static/**"]
+deny_paths: ["/__admin/**"]
+
+commit:
+  # Every commit-class action needs an explicit approval: an operator decision,
+  # or an invocation-level approval from the calling agent/user.
+  require_approval: true
+  # On production tenants only reviewed (approved) capabilities may run.
+  production_requires_approved_capability: true
+  # Sandbox tenants may run drafts, so new write flows can be verified.
+  allow_draft_in_sandbox: true

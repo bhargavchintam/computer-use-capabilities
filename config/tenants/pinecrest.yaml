@@ -1,0 +1,10 @@
+id: pinecrest
+display_name: Pinecrest Community CU (demo)
+environment: sandbox
+app: acmecore
+product_version: "7.2.4"
+base_url: http://127.0.0.1:8401
+secrets:
+  operator_id: env:PINECREST_OPERATOR_ID
+  operator_password: env:PINECREST_OPERATOR_PASSWORD
+policy: default

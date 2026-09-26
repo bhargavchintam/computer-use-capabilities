@@ -1,0 +1,123 @@
+# HAND-WRITTEN TEST FIXTURE (source: author). It mirrors what the discovery
+# compiler emits so the replay engine can be tested without an LLM. The
+# evidence artifact in /evidence comes from a real discovery run.
+schema_version: "1.0"
+id: acmecore.member.get_share_balance
+version: 1.0.0
+status: draft
+title: Look up a member and read their share balances
+description: >-
+  Opens Member Inquiry, searches by member number, and reads the PRIMARY
+  SAVINGS balance plus the full shares table from the Member Summary page.
+contract:
+  inputs:
+    member_number:
+      type: string
+      description: The member's number.
+      pattern: "^[0-9]{5}$"
+      sensitivity: pii_identifier
+  outputs:
+    savings_balance:
+      type: money
+      description: Current balance of the member's PRIMARY SAVINGS share.
+      currency: USD
+      sensitivity: confidential
+    shares:
+      type: table
+      description: Every share with its id, description and current balance.
+      columns: {share_id: identifier, description: string, balance: money}
+      sensitivity: confidential
+  outcomes:
+    MEMBER_NOT_FOUND:
+      description: No member exists with this member number.
+      caller_guidance: Ask the user to double-check the member number. Safe to retry with a corrected number.
+    ACCOUNT_RESTRICTED:
+      description: The member record is restricted (e.g. an employee account) for this operator.
+      caller_guidance: Do not retry automatically. Route the request to staff with supervisor access.
+    INPUT_REJECTED_BY_APP:
+      description: The application rejected the member number format.
+      caller_guidance: Correct the member number (digits only) and retry.
+  effects: read_only
+  idempotent: true
+implementation:
+  app: {product: acmecore, versions: ">=7.2,<8.0", surface: web}
+  entry: {route: /core/main}
+  steps:
+    - id: click_member_inquiry
+      intent: Open Member Inquiry from the menu
+      action: click
+      effect: read
+      target:
+        container: ["frame:nav"]
+        strategies:
+          - {kind: role_name, role: link, name: Member Inquiry}
+          - {kind: attr, tag: a, attrs: {href: /core/inquiry}}
+      expect:
+        - {document_changed: {container: ["frame:work"]}}
+        - {text_visible: {container: ["frame:work"], text: Member Inquiry}}
+      provenance: author
+    - id: fill_member_number
+      intent: Enter the member number
+      action: fill
+      effect: input
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: label, role: textbox, label: "Member #:"}
+          - {kind: attr, tag: input, attrs: {name: txtMbr}}
+      value: {param: member_number}
+      expect:
+        - {field_value: {equals: {param: member_number}}}
+      provenance: author
+    - id: click_search
+      intent: Run the search
+      action: click
+      effect: read
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: role_name, role: button, name: Search}
+          - {kind: attr, tag: input, attrs: {name: btnSrch}}
+      expect:
+        - {document_changed: {container: ["frame:work"]}}
+        - {text_visible: {container: ["frame:work"], text: Member Summary}}
+      provenance: author
+    - id: extract_savings_balance
+      intent: Read the PRIMARY SAVINGS balance
+      action: extract
+      effect: read
+      output: savings_balance
+      parse: money
+      target:
+        container: ["frame:work"]
+        strategies:
+          - kind: table_cell
+            headers: [Description, Balance]
+            row: {column: Description, equals: PRIMARY SAVINGS}
+            column: Balance
+      provenance: author
+    - id: extract_shares
+      intent: Read the shares table
+      action: extract_table
+      effect: read
+      output: shares
+      columns: {share_id: Share ID, description: Description, balance: Balance}
+      target:
+        container: ["frame:work"]
+        strategies:
+          - {kind: table, headers: [Share ID, Description, Balance]}
+      provenance: author
+  outcome_detectors:
+    MEMBER_NOT_FOUND: {ref: member_not_found}
+    ACCOUNT_RESTRICTED: {ref: account_restricted}
+    INPUT_REJECTED_BY_APP: {ref: member_number_invalid}
+  success:
+    all_of:
+      - {text_visible: {container: ["frame:work"], text: Member Summary}}
+      - {text_visible: {container: ["frame:work"], text: {param: member_number}}}
+      - {outputs_present: [savings_balance, shares]}
+provenance:
+  source: author
+  recorded_at: "2026-09-25T00:00:00Z"
+  notes:
+    - Hand-written test fixture; see /evidence for the discovered artifact.

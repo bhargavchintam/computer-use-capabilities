@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-FaultKind = Literal["maintenance", "alert", "error500", "slow"]
+FaultKind = Literal["maintenance", "alert", "error500", "slow", "expire"]
 
 
 @dataclass
