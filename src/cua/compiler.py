@@ -15,6 +15,7 @@ import fnmatch
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,6 +34,7 @@ from .models import (
 from .models.capability import AppBinding, CallExample, Contract, Entry, Implementation, OutcomeDetector, Step
 from .models.conditions import (
     AllOf,
+    ContainerArgs,
     DocumentChanged,
     FieldValue,
     FieldValueArgs,
@@ -208,7 +210,7 @@ def _expect(step: TraceStep, avoid: list[str], value: Any) -> list[Any]:
     for c in step.after.changed_containers(step.before):
         if not c:
             continue  # top-level document changes (sign-on/off) are not flow checkpoints
-        out.append(DocumentChanged(document_changed={"container": list(c)}))
+        out.append(DocumentChanged(document_changed=ContainerArgs(container=list(c))))
         mark = _landmark(step.before.frames.get(c), step.after.frames[c], avoid)
         if mark:
             out.append(TextVisible(text_visible=TextArgs(container=list(c), text=mark)))
@@ -321,13 +323,13 @@ def compile_capability(
     }
     outcomes: dict[str, OutcomeSpec] = {}
     detectors: dict[str, OutcomeDetector] = {}
-    for msg_id, m in app.messages.items():
-        if m.routes and not any(fnmatch.fnmatch(p, r) for p in visited for r in m.routes):
+    for msg_id, rule in app.messages.items():
+        if rule.routes and not any(fnmatch.fnmatch(p, r) for p in visited for r in rule.routes):
             continue
-        outcomes[m.outcome] = OutcomeSpec(
-            description=m.description, caller_guidance=m.caller_guidance, retry_safe=m.retry_safe
+        outcomes[rule.outcome] = OutcomeSpec(
+            description=rule.description, caller_guidance=rule.caller_guidance, retry_safe=rule.retry_safe
         )
-        detectors[m.outcome] = OutcomeDetector(ref=msg_id)
+        detectors[rule.outcome] = OutcomeDetector(ref=msg_id)
 
     commits = any(s.effect == "commit" for s in steps)
     major, minor = tenant.product_version.split(".")[:2]
@@ -377,7 +379,7 @@ def compile_capability(
     return cap, notes
 
 
-def _shape(kind: str, columns: dict[str, str] | None) -> Any:
+def _shape(kind: str, columns: Mapping[str, str] | None) -> Any:
     if kind == "money":
         return {"amount": "<decimal>", "currency": "USD"}
     if kind == "table":

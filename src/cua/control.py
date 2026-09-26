@@ -106,6 +106,7 @@ class SessionController:
         self._decisions: asyncio.Queue[tuple[str, DecisionKind, str, str | None]] = asyncio.Queue()
         self._human_actions: list[HumanAction] = []
         self._captured: list[dict[str, Any]] = []
+        self._pending_capture: tuple[dict[str, Any], list[str]] | None = None
         # Hooks: the surface brings the window forward; operator surfaces get notified.
         self.on_take_control: Callable[[], Awaitable[None]] | None = None
         self.on_request: list[Callable[[InterventionRequest], None]] = []
@@ -304,7 +305,7 @@ class SessionController:
             self._implicit_takeover(payload, container)
 
     def _flush_pending(self) -> None:
-        pending = getattr(self, "_pending_capture", None)
+        pending = self._pending_capture
         if pending and self.state == ControlState.HUMAN:
             self._record_human(*pending)
             self._pending_capture = None

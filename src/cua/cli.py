@@ -17,14 +17,19 @@ from rich.table import Table
 from .configio import load_model, load_tenant, model_to_yaml, repo_root
 from .models import Capability, GoalSpec, RunResult
 from .registry import NotFound, Registry
+from .replay import OperatorMode
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help=__doc__)
 mock_app = typer.Typer(
     no_args_is_help=True, help="Run and poke the local AcmeCore mock bank (synthetic data)."
 )
 caps_app = typer.Typer(no_args_is_help=True, help="Inspect, validate and approve capability artifacts.")
+catalog_app = typer.Typer(
+    no_args_is_help=True, help="Approved capabilities as typed tools for a calling agent."
+)
 app.add_typer(mock_app, name="mock")
 app.add_typer(caps_app, name="capabilities")
+app.add_typer(catalog_app, name="catalog")
 console = Console()
 
 
@@ -36,6 +41,12 @@ def _kv(pairs: list[str]) -> dict[str, str]:
         k, v = p.split("=", 1)
         out[k.strip()] = v
     return out
+
+
+def _operator(value: str) -> OperatorMode:
+    if value not in ("none", "console"):
+        raise typer.BadParameter("--operator must be none or console")
+    return value  # type: ignore[return-value]
 
 
 def _load_cap(ref: str) -> Capability:
@@ -126,11 +137,11 @@ def replay(
             inputs=_kv(input),
             approve=approve,
             headed=headed,
-            operator=operator,
+            operator=_operator(operator),
             use_overlays=not no_overlays,
             record_video=video,
         )
-    )  # type: ignore[arg-type]
+    )
     if as_json:
         print(result.model_dump_json(indent=2))
     else:
@@ -170,8 +181,8 @@ def discover(
             spec=goal_spec,
             verify_inputs=_kv(verify_input),
             headed=headed,
-            operator=operator,
-            max_turns=max_turns,  # type: ignore[arg-type]
+            operator=_operator(operator),
+            max_turns=max_turns,
             vision=not no_vision,
             record_video=video,
         )
@@ -246,6 +257,28 @@ def caps_schema(out: Path = Path("schemas/capability.schema.json")) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(Capability.model_json_schema(), indent=2) + "\n", encoding="utf-8")
     console.print(f"wrote {out}")
+
+
+# ---------------------------------------------------------------------------------- catalog
+
+
+@catalog_app.command("export")
+def catalog_export(tenant: str) -> None:
+    """Print the tool definitions a calling agent would see for this tenant."""
+    from .catalog import eligible, tool_for
+
+    print(json.dumps([tool_for(c) for c in eligible(tenant)], indent=2))
+
+
+@catalog_app.command("ask")
+def catalog_ask(question: str, tenant: str) -> None:
+    """A small calling agent answers a question by invoking capabilities (executed by deterministic replay)."""
+    from .catalog import ask
+
+    out = asyncio.run(ask(question, tenant))
+    for c in out["calls"]:
+        console.print(f"  called {c['tool']} -> replay {c['replay_run']} [{c['status']}]")
+    console.print(f"\n[bold]answer[/] {out['answer']}\n[dim]evidence: {out['evidence_dir']}[/]")
 
 
 # ---------------------------------------------------------------------------------- mock bank

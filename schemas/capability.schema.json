@@ -1,0 +1,1565 @@
+{
+  "$defs": {
+    "AllOf": {
+      "additionalProperties": false,
+      "properties": {
+        "all_of": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextVisible"
+              },
+              {
+                "$ref": "#/$defs/TextMatches"
+              },
+              {
+                "$ref": "#/$defs/DocumentChanged"
+              },
+              {
+                "$ref": "#/$defs/UrlMatches"
+              },
+              {
+                "$ref": "#/$defs/ElementPresent"
+              },
+              {
+                "$ref": "#/$defs/FieldValue"
+              },
+              {
+                "$ref": "#/$defs/OutputsPresent"
+              },
+              {
+                "$ref": "#/$defs/AllOf"
+              },
+              {
+                "$ref": "#/$defs/AnyOf"
+              }
+            ]
+          },
+          "title": "All Of",
+          "type": "array"
+        }
+      },
+      "required": [
+        "all_of"
+      ],
+      "title": "AllOf",
+      "type": "object"
+    },
+    "AnyOf": {
+      "additionalProperties": false,
+      "properties": {
+        "any_of": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextVisible"
+              },
+              {
+                "$ref": "#/$defs/TextMatches"
+              },
+              {
+                "$ref": "#/$defs/DocumentChanged"
+              },
+              {
+                "$ref": "#/$defs/UrlMatches"
+              },
+              {
+                "$ref": "#/$defs/ElementPresent"
+              },
+              {
+                "$ref": "#/$defs/FieldValue"
+              },
+              {
+                "$ref": "#/$defs/OutputsPresent"
+              },
+              {
+                "$ref": "#/$defs/AllOf"
+              },
+              {
+                "$ref": "#/$defs/AnyOf"
+              }
+            ]
+          },
+          "title": "Any Of",
+          "type": "array"
+        }
+      },
+      "required": [
+        "any_of"
+      ],
+      "title": "AnyOf",
+      "type": "object"
+    },
+    "AppBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "product": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Product",
+          "type": "string"
+        },
+        "versions": {
+          "title": "Versions",
+          "type": "string"
+        },
+        "surface": {
+          "default": "web",
+          "enum": [
+            "web",
+            "desktop",
+            "pixel"
+          ],
+          "title": "Surface",
+          "type": "string"
+        }
+      },
+      "required": [
+        "product",
+        "versions"
+      ],
+      "title": "AppBinding",
+      "type": "object"
+    },
+    "Approval": {
+      "additionalProperties": false,
+      "properties": {
+        "approved_by": {
+          "title": "Approved By",
+          "type": "string"
+        },
+        "approved_at": {
+          "title": "Approved At",
+          "type": "string"
+        },
+        "content_sha256": {
+          "title": "Content Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approved_by",
+        "approved_at",
+        "content_sha256"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "AttrStrategy": {
+      "additionalProperties": false,
+      "description": "Stable markup attributes (name, type, alt, href path...). Auto-generated\nlooking ids are rejected at record time.",
+      "properties": {
+        "kind": {
+          "const": "attr",
+          "default": "attr",
+          "title": "Kind",
+          "type": "string"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "attrs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "minProperties": 1,
+          "title": "Attrs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "tag",
+        "attrs"
+      ],
+      "title": "AttrStrategy",
+      "type": "object"
+    },
+    "CallExample": {
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Input",
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "title": "Output",
+          "type": "object"
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "title": "CallExample",
+      "type": "object"
+    },
+    "ContainerArgs": {
+      "additionalProperties": false,
+      "properties": {
+        "container": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Container",
+          "type": "array"
+        }
+      },
+      "title": "ContainerArgs",
+      "type": "object"
+    },
+    "Contract": {
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/InputSpec"
+          },
+          "title": "Inputs",
+          "type": "object"
+        },
+        "outputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/OutputSpec"
+          },
+          "title": "Outputs",
+          "type": "object"
+        },
+        "outcomes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/OutcomeSpec"
+          },
+          "title": "Outcomes",
+          "type": "object"
+        },
+        "effects": {
+          "enum": [
+            "read_only",
+            "commit"
+          ],
+          "title": "Effects",
+          "type": "string"
+        },
+        "idempotent": {
+          "title": "Idempotent",
+          "type": "boolean"
+        },
+        "example": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CallExample"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "inputs",
+        "outputs",
+        "effects",
+        "idempotent"
+      ],
+      "title": "Contract",
+      "type": "object"
+    },
+    "DialogExpectation": {
+      "additionalProperties": false,
+      "description": "A native dialog the flow expects at this step, and how to answer it.",
+      "properties": {
+        "match": {
+          "title": "Match",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "accept",
+            "dismiss"
+          ],
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "match",
+        "action"
+      ],
+      "title": "DialogExpectation",
+      "type": "object"
+    },
+    "DocumentChanged": {
+      "additionalProperties": false,
+      "description": "The container's document was replaced since the action started.\n\nLegacy postbacks re-render at the same URL, so URL checks alone can pass on\nthe *old* page; the init script stamps each document with a nonce instead.",
+      "properties": {
+        "document_changed": {
+          "$ref": "#/$defs/ContainerArgs"
+        }
+      },
+      "required": [
+        "document_changed"
+      ],
+      "title": "DocumentChanged",
+      "type": "object"
+    },
+    "ElementPresent": {
+      "additionalProperties": false,
+      "properties": {
+        "element_present": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "element_present"
+      ],
+      "title": "ElementPresent",
+      "type": "object"
+    },
+    "Entry": {
+      "additionalProperties": false,
+      "properties": {
+        "route": {
+          "title": "Route",
+          "type": "string"
+        }
+      },
+      "required": [
+        "route"
+      ],
+      "title": "Entry",
+      "type": "object"
+    },
+    "FieldValue": {
+      "additionalProperties": false,
+      "properties": {
+        "field_value": {
+          "$ref": "#/$defs/FieldValueArgs"
+        }
+      },
+      "required": [
+        "field_value"
+      ],
+      "title": "FieldValue",
+      "type": "object"
+    },
+    "FieldValueArgs": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "equals": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ParamRef"
+            },
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "$ref": "#/$defs/LiteralValue"
+            }
+          ],
+          "title": "Equals"
+        }
+      },
+      "required": [
+        "equals"
+      ],
+      "title": "FieldValueArgs",
+      "type": "object"
+    },
+    "Fingerprint": {
+      "additionalProperties": false,
+      "description": "What the element looked like at record time. Diagnostics and drift signals only.",
+      "properties": {
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "css_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Css Path"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "title": "Fingerprint",
+      "type": "object"
+    },
+    "Implementation": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "$ref": "#/$defs/AppBinding"
+        },
+        "entry": {
+          "$ref": "#/$defs/Entry"
+        },
+        "preconditions": {
+          "items": {
+            "const": "authenticated_session",
+            "type": "string"
+          },
+          "title": "Preconditions",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "outcome_detectors": {
+          "additionalProperties": {
+            "$ref": "#/$defs/OutcomeDetector"
+          },
+          "title": "Outcome Detectors",
+          "type": "object"
+        },
+        "success": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TextVisible"
+            },
+            {
+              "$ref": "#/$defs/TextMatches"
+            },
+            {
+              "$ref": "#/$defs/DocumentChanged"
+            },
+            {
+              "$ref": "#/$defs/UrlMatches"
+            },
+            {
+              "$ref": "#/$defs/ElementPresent"
+            },
+            {
+              "$ref": "#/$defs/FieldValue"
+            },
+            {
+              "$ref": "#/$defs/OutputsPresent"
+            },
+            {
+              "$ref": "#/$defs/AllOf"
+            },
+            {
+              "$ref": "#/$defs/AnyOf"
+            }
+          ],
+          "title": "Success"
+        }
+      },
+      "required": [
+        "app",
+        "entry",
+        "steps",
+        "success"
+      ],
+      "title": "Implementation",
+      "type": "object"
+    },
+    "InputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "money",
+            "date",
+            "enum"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pattern"
+        },
+        "enum": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enum"
+        },
+        "max_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Value"
+        },
+        "sensitivity": {
+          "default": "internal",
+          "enum": [
+            "public",
+            "internal",
+            "pii_identifier",
+            "pii",
+            "confidential"
+          ],
+          "title": "Sensitivity",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "description"
+      ],
+      "title": "InputSpec",
+      "type": "object"
+    },
+    "LabelStrategy": {
+      "additionalProperties": false,
+      "description": "A control found by its label: explicit <label>/aria, or the text a human reads\nbeside it (legacy layout tables put \"Member #:\" in the previous cell).",
+      "properties": {
+        "kind": {
+          "const": "label",
+          "default": "label",
+          "title": "Kind",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "label"
+      ],
+      "title": "LabelStrategy",
+      "type": "object"
+    },
+    "LiteralValue": {
+      "additionalProperties": false,
+      "description": "A fixed UI value (e.g. a menu option). Linted so it can't smuggle data.",
+      "properties": {
+        "literal": {
+          "title": "Literal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "literal"
+      ],
+      "title": "LiteralValue",
+      "type": "object"
+    },
+    "OutcomeDetector": {
+      "additionalProperties": false,
+      "description": "How a declared outcome shows up on screen: a reference to the app profile's\nmessage catalog (shared across capabilities) or an inline condition.",
+      "properties": {
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TextVisible"
+                },
+                {
+                  "$ref": "#/$defs/TextMatches"
+                },
+                {
+                  "$ref": "#/$defs/DocumentChanged"
+                },
+                {
+                  "$ref": "#/$defs/UrlMatches"
+                },
+                {
+                  "$ref": "#/$defs/ElementPresent"
+                },
+                {
+                  "$ref": "#/$defs/FieldValue"
+                },
+                {
+                  "$ref": "#/$defs/OutputsPresent"
+                },
+                {
+                  "$ref": "#/$defs/AllOf"
+                },
+                {
+                  "$ref": "#/$defs/AnyOf"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "When"
+        }
+      },
+      "title": "OutcomeDetector",
+      "type": "object"
+    },
+    "OutcomeSpec": {
+      "additionalProperties": false,
+      "description": "A legitimate business result the caller must handle (not an error).",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "caller_guidance": {
+          "title": "Caller Guidance",
+          "type": "string"
+        },
+        "retry_safe": {
+          "default": true,
+          "title": "Retry Safe",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "description",
+        "caller_guidance"
+      ],
+      "title": "OutcomeSpec",
+      "type": "object"
+    },
+    "OutputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "money",
+            "date",
+            "identifier",
+            "table"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "columns": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "enum": [
+                  "string",
+                  "integer",
+                  "money",
+                  "date",
+                  "identifier"
+                ],
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Columns"
+        },
+        "sensitivity": {
+          "default": "internal",
+          "enum": [
+            "public",
+            "internal",
+            "pii_identifier",
+            "pii",
+            "confidential"
+          ],
+          "title": "Sensitivity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "description"
+      ],
+      "title": "OutputSpec",
+      "type": "object"
+    },
+    "OutputsPresent": {
+      "additionalProperties": false,
+      "properties": {
+        "outputs_present": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Outputs Present",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outputs_present"
+      ],
+      "title": "OutputsPresent",
+      "type": "object"
+    },
+    "ParamRef": {
+      "additionalProperties": false,
+      "description": "A value supplied by the caller at invocation time.",
+      "properties": {
+        "param": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Param",
+          "type": "string"
+        }
+      },
+      "required": [
+        "param"
+      ],
+      "title": "ParamRef",
+      "type": "object"
+    },
+    "PatternArgs": {
+      "additionalProperties": false,
+      "properties": {
+        "container": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Container",
+          "type": "array"
+        },
+        "pattern": {
+          "title": "Pattern",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern"
+      ],
+      "title": "PatternArgs",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "enum": [
+            "discovery",
+            "author"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "recorded_at": {
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "goal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Goal"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "tenant": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenant"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "enum": [
+                "sandbox",
+                "production"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment"
+        },
+        "trace_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trace Sha256"
+        },
+        "verified_by_runs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Verified By Runs",
+          "type": "array"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "source",
+        "recorded_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "RoleName": {
+      "additionalProperties": false,
+      "description": "Role plus accessible name, e.g. link \"Member Inquiry\".",
+      "properties": {
+        "kind": {
+          "const": "role_name",
+          "default": "role_name",
+          "title": "Kind",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "name"
+      ],
+      "title": "RoleName",
+      "type": "object"
+    },
+    "RowKey": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "title": "Column",
+          "type": "string"
+        },
+        "equals": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ParamRef"
+            }
+          ],
+          "title": "Equals"
+        }
+      },
+      "required": [
+        "column",
+        "equals"
+      ],
+      "title": "RowKey",
+      "type": "object"
+    },
+    "SecretRef": {
+      "additionalProperties": false,
+      "description": "A credential resolved from the tenant's secret store at runtime; never stored.",
+      "properties": {
+        "secret": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Secret",
+          "type": "string"
+        }
+      },
+      "required": [
+        "secret"
+      ],
+      "title": "SecretRef",
+      "type": "object"
+    },
+    "Step": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "intent": {
+          "title": "Intent",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "click",
+            "fill",
+            "select",
+            "press_key",
+            "extract",
+            "extract_table"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "effect": {
+          "enum": [
+            "read",
+            "input",
+            "commit"
+          ],
+          "title": "Effect",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ParamRef"
+                },
+                {
+                  "$ref": "#/$defs/SecretRef"
+                },
+                {
+                  "$ref": "#/$defs/LiteralValue"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "enum": [
+                "Enter",
+                "Tab",
+                "Escape"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output"
+        },
+        "parse": {
+          "anyOf": [
+            {
+              "enum": [
+                "string",
+                "integer",
+                "money",
+                "date",
+                "identifier"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parse"
+        },
+        "columns": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Columns"
+        },
+        "pre": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextVisible"
+              },
+              {
+                "$ref": "#/$defs/TextMatches"
+              },
+              {
+                "$ref": "#/$defs/DocumentChanged"
+              },
+              {
+                "$ref": "#/$defs/UrlMatches"
+              },
+              {
+                "$ref": "#/$defs/ElementPresent"
+              },
+              {
+                "$ref": "#/$defs/FieldValue"
+              },
+              {
+                "$ref": "#/$defs/OutputsPresent"
+              },
+              {
+                "$ref": "#/$defs/AllOf"
+              },
+              {
+                "$ref": "#/$defs/AnyOf"
+              }
+            ]
+          },
+          "title": "Pre",
+          "type": "array"
+        },
+        "expect": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextVisible"
+              },
+              {
+                "$ref": "#/$defs/TextMatches"
+              },
+              {
+                "$ref": "#/$defs/DocumentChanged"
+              },
+              {
+                "$ref": "#/$defs/UrlMatches"
+              },
+              {
+                "$ref": "#/$defs/ElementPresent"
+              },
+              {
+                "$ref": "#/$defs/FieldValue"
+              },
+              {
+                "$ref": "#/$defs/OutputsPresent"
+              },
+              {
+                "$ref": "#/$defs/AllOf"
+              },
+              {
+                "$ref": "#/$defs/AnyOf"
+              }
+            ]
+          },
+          "title": "Expect",
+          "type": "array"
+        },
+        "on_dialog": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DialogExpectation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "optional": {
+          "default": false,
+          "title": "Optional",
+          "type": "boolean"
+        },
+        "timeout_ms": {
+          "default": 10000,
+          "maximum": 120000,
+          "minimum": 500,
+          "title": "Timeout Ms",
+          "type": "integer"
+        },
+        "provenance": {
+          "default": "agent",
+          "enum": [
+            "agent",
+            "human",
+            "author"
+          ],
+          "title": "Provenance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "intent",
+        "action",
+        "effect",
+        "target"
+      ],
+      "title": "Step",
+      "type": "object"
+    },
+    "TableCell": {
+      "additionalProperties": false,
+      "description": "A value cell addressed like a human reads a grid: which table (by its header\nset), which row (by a key column), which column (by header). Never by the\ncell's own text, which is data and changes per invocation.",
+      "properties": {
+        "kind": {
+          "const": "table_cell",
+          "default": "table_cell",
+          "title": "Kind",
+          "type": "string"
+        },
+        "headers": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Headers",
+          "type": "array"
+        },
+        "row": {
+          "$ref": "#/$defs/RowKey"
+        },
+        "column": {
+          "title": "Column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "headers",
+        "row",
+        "column"
+      ],
+      "title": "TableCell",
+      "type": "object"
+    },
+    "TableStrategy": {
+      "additionalProperties": false,
+      "description": "A whole data table, identified by (a subset of) its header row.",
+      "properties": {
+        "kind": {
+          "const": "table",
+          "default": "table",
+          "title": "Kind",
+          "type": "string"
+        },
+        "headers": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Headers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "headers"
+      ],
+      "title": "TableStrategy",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "container": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Container",
+          "type": "array"
+        },
+        "strategies": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "attr": "#/$defs/AttrStrategy",
+                "label": "#/$defs/LabelStrategy",
+                "role_name": "#/$defs/RoleName",
+                "table": "#/$defs/TableStrategy",
+                "table_cell": "#/$defs/TableCell"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/RoleName"
+              },
+              {
+                "$ref": "#/$defs/LabelStrategy"
+              },
+              {
+                "$ref": "#/$defs/TableCell"
+              },
+              {
+                "$ref": "#/$defs/TableStrategy"
+              },
+              {
+                "$ref": "#/$defs/AttrStrategy"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Strategies",
+          "type": "array"
+        },
+        "fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fingerprint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "strategies"
+      ],
+      "title": "Target",
+      "type": "object"
+    },
+    "TextArgs": {
+      "additionalProperties": false,
+      "properties": {
+        "container": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Container",
+          "type": "array"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ParamRef"
+            }
+          ],
+          "title": "Text"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextArgs",
+      "type": "object"
+    },
+    "TextMatches": {
+      "additionalProperties": false,
+      "properties": {
+        "text_matches": {
+          "$ref": "#/$defs/PatternArgs"
+        }
+      },
+      "required": [
+        "text_matches"
+      ],
+      "title": "TextMatches",
+      "type": "object"
+    },
+    "TextVisible": {
+      "additionalProperties": false,
+      "properties": {
+        "text_visible": {
+          "$ref": "#/$defs/TextArgs"
+        }
+      },
+      "required": [
+        "text_visible"
+      ],
+      "title": "TextVisible",
+      "type": "object"
+    },
+    "UrlArgs": {
+      "additionalProperties": false,
+      "properties": {
+        "container": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Container",
+          "type": "array"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "UrlArgs",
+      "type": "object"
+    },
+    "UrlMatches": {
+      "additionalProperties": false,
+      "properties": {
+        "url_matches": {
+          "$ref": "#/$defs/UrlArgs"
+        }
+      },
+      "required": [
+        "url_matches"
+      ],
+      "title": "UrlMatches",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "version": {
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "title": "Version",
+      "type": "string"
+    },
+    "status": {
+      "default": "draft",
+      "enum": [
+        "draft",
+        "approved",
+        "deprecated"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "contract": {
+      "$ref": "#/$defs/Contract"
+    },
+    "implementation": {
+      "$ref": "#/$defs/Implementation"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "approval": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Approval"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "title",
+    "description",
+    "contract",
+    "implementation",
+    "provenance"
+  ],
+  "title": "Capability",
+  "type": "object"
+}

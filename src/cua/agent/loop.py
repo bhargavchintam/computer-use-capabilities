@@ -505,7 +505,7 @@ class DiscoveryAgent:
                 return await self._error("point at the table (or any cell of it) for a list output")
             el = table
             d = await self.surface.describe(el)
-            headers = next(
+            headers: list[str] = next(
                 (c["strategy"]["headers"] for c in d["candidates"] if c["strategy"]["kind"] == "table"), []
             )
             columns = _map_columns(list(spec.columns or {}), headers)

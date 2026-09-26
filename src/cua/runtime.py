@@ -330,11 +330,11 @@ class RuntimeGuard:
         if phase == "post":
             for rule in self.outcome_rules:
                 if await self.checks.holds(rule.condition):
-                    message = (
+                    snippet = (
                         (await self.checks.snippet(rule.pattern, rule.container)) if rule.pattern else None
                     )
                     return Hit(
-                        "business_outcome", rule.code, rule.code, s.redactor.scrub_text(message or rule.code)
+                        "business_outcome", rule.code, rule.code, s.redactor.scrub_text(snippet or rule.code)
                     )
         return None
 

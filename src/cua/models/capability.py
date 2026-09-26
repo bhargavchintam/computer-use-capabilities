@@ -174,12 +174,14 @@ class OutcomeDetector(Strict):
         return self
 
 
+def _default_preconditions() -> list[Literal["authenticated_session"]]:
+    return ["authenticated_session"]
+
+
 class Implementation(Strict):
     app: AppBinding
     entry: Entry
-    preconditions: list[Literal["authenticated_session"]] = Field(
-        default_factory=lambda: ["authenticated_session"]
-    )
+    preconditions: list[Literal["authenticated_session"]] = Field(default_factory=_default_preconditions)
     steps: list[Step] = Field(min_length=1)
     outcome_detectors: dict[str, OutcomeDetector] = Field(default_factory=dict)
     success: Condition

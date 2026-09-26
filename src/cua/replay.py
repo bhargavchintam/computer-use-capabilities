@@ -10,10 +10,10 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from .checks import Checks, strategy_dicts
 from .configio import load_app_profile, load_overlays, load_policy, load_tenant, repo_root
@@ -24,6 +24,7 @@ from .models import Capability, Step, describe
 from .models.conditions import PatternArgs, TextMatches
 from .models.results import (
     RETRYABLE,
+    FailureCode,
     FailureInfo,
     InterventionRecord,
     OutcomeInfo,
@@ -40,7 +41,7 @@ from .surface.web import Resolution
 from .tenancy import EffectivePlan, resolve_plan, version_in
 
 OperatorMode = Literal["none", "console", "scripted"]
-OperatorHook = Callable[[SessionController, RuntimeSession], Awaitable[None]]
+OperatorHook = Callable[[SessionController, RuntimeSession], Coroutine[Any, Any, None]]
 MAX_REDRIVES = 2
 
 
@@ -93,6 +94,11 @@ def validate_inputs(cap: Capability, raw: dict[str, str]) -> tuple[dict[str, str
             errors.append(f"{name}: not an integer")
         clean[name] = value
     return clean, errors
+
+
+def failure_code(value: str | None, default: FailureCode) -> FailureCode:
+    """Codes in app-profile config are strings; only known failure codes reach the result contract."""
+    return value if value in get_args(FailureCode) else default  # type: ignore[return-value]
 
 
 def parse_value(text: str, kind: str, currency: str | None = None) -> Any:
@@ -272,8 +278,12 @@ class ReplayEngine:
                 report.strategy = f"{res.strategy['kind']}#{res.index}"
                 return
         except _Stop as stop:
-            report.status = {"business_outcome": "outcome", "needs_human": "awaiting_human"}.get(
-                stop.status, "failed"
+            report.status = (
+                "outcome"
+                if stop.status == "business_outcome"
+                else "awaiting_human"
+                if stop.status == "needs_human"
+                else "failed"
             )
             raise
         finally:
@@ -557,7 +567,7 @@ class ReplayEngine:
                 )
                 return await self._after_handback(step, before_docs, handoff)
             det = hit.detector
-            code = det.failure_code if det and det.failure_code else "APP_ERROR"
+            code = failure_code(det.failure_code if det else None, "APP_ERROR")
             raise await self._fail(
                 code,
                 f"{hit.message} (persisted after bounded recovery: {outcome.detail})",
@@ -583,9 +593,8 @@ class ReplayEngine:
                 "human_required", step, reason=hit.message, allowed=["take_control", "abort"]
             )
             return await self._after_handback(step, before_docs, handoff)
-        raise await self._fail(
-            hit.code or "UNRECOGNIZED_STATE", hit.message, step=step, retryable=(hit.code or "") in RETRYABLE
-        )
+        code = failure_code(hit.code, "UNRECOGNIZED_STATE")
+        raise await self._fail(code, hit.message, step=step, retryable=code in RETRYABLE)
 
     # ------------------------------------------------------------------ human in the loop
     async def _escalate(
@@ -696,7 +705,7 @@ class ReplayEngine:
 
     async def _fail(
         self,
-        code: str,
+        code: FailureCode,
         message: str,
         *,
         step: Step | None = None,
@@ -719,7 +728,7 @@ class ReplayEngine:
         err = FailureInfo(
             code=code,
             message=self.redactor.scrub_text(message),
-            step_id=step.id if step else None,  # type: ignore[arg-type]
+            step_id=step.id if step else None,
             step_intent=step.intent if step else None,
             expected=expected,
             observed=observed,
