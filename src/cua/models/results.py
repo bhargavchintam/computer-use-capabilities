@@ -14,9 +14,11 @@ did anything commit? ``retry_safe`` is derived from it.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 RunStatus = Literal["succeeded", "business_outcome", "rejected", "needs_human", "failed"]
 SideEffect = Literal["none", "not_committed", "committed", "unknown"]
@@ -139,3 +141,14 @@ class RunResult(BaseModel):
     finished_at: str | None = None
     duration_ms: int | None = None
     evidence_dir: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def trace_sha256(self) -> str:
+        """The path this run took: each step, how it ended, and which locator strategy matched.
+
+        Replay is deterministic: the same capability on the same application state takes the
+        same path. Tests and the evidence generator run every scenario twice and compare this.
+        """
+        path = [[s.step_id, s.status, s.strategy] for s in self.steps]
+        return hashlib.sha256(json.dumps(path).encode()).hexdigest()

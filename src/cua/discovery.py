@@ -4,7 +4,6 @@ artifact -> lint -> verify-by-replay (fresh session, different inputs) -> regist
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from pathlib import Path
 from typing import Any
@@ -15,11 +14,18 @@ from .agent.llm import DEFAULT_MODEL, FALLBACK_BETA, AnthropicLLM, LLMClient, an
 from .agent.loop import DiscoveryAgent
 from .agent.prompts import GOAL_COMPILER
 from .compiler import CompileError, compile_capability, lint
-from .configio import dump_yaml, load_app_profile, load_policy, load_tenant, model_to_yaml, repo_root
+from .configio import (
+    dump_yaml,
+    load_app_profile,
+    load_policy,
+    load_tenant,
+    model_to_yaml,
+    repo_root,
+    shown_path,
+)
 from .control import SessionController
 from .evidence import RunRecorder
 from .models import AppProfile, Capability, GoalSpec, GoalSpecDraft
-from .models.conditions import condition_kind
 from .models.results import InterventionRecord, RunResult
 from .policy import PolicyEngine
 from .redaction import Redactor
@@ -111,7 +117,7 @@ async def run_discovery(
     goal: str | None = None,
     spec: GoalSpec | None = None,
     verify_inputs: dict[str, str] | None = None,
-    headed: bool = False,
+    headed: bool | None = None,
     operator: OperatorMode = "none",
     operator_hook: OperatorHook | None = None,
     llm: LLMClient | None = None,
@@ -168,7 +174,7 @@ async def run_discovery(
         redactor=redactor,
         recorder=recorder,
         controller=controller,
-        headed=headed or operator == "console",
+        headed=operator == "console" if headed is None else headed,  # a person needs a window to take over
         record_video=record_video,
     )
     console = None
@@ -230,7 +236,13 @@ async def run_discovery(
             runs_root,
             verify_inputs,
         )
-    recorder.save_json("discovery_report.json", report.model_dump(mode="json"))
+    persisted = report.model_dump(mode="json")
+    for key in ("evidence_dir", "capability_path"):
+        if persisted.get(key):
+            persisted[key] = shown_path(persisted[key])
+    if persisted.get("verification") and persisted["verification"].get("evidence_dir"):
+        persisted["verification"]["evidence_dir"] = shown_path(persisted["verification"]["evidence_dir"])
+    recorder.save_json("discovery_report.json", persisted)
     recorder.event("discovery_report", status=report.status, code=report.code, capability=report.capability)
     recorder.close()
     return report
@@ -311,8 +323,8 @@ async def _compile_and_verify(
     (recorder.dir / "capability.yaml").write_text(model_to_yaml(cap), encoding="utf-8")
     report.capability, report.capability_path = cap.ref, str(path)
     recorder.event(
-        "capability_saved", capability=cap.ref, path=str(path), content_sha256=cap.content_sha256()
+        "capability_saved", capability=cap.ref, path=shown_path(path), content_sha256=cap.content_sha256()
     )
 
 
-__all__ = ["DiscoveryReport", "compile_goal", "condition_kind", "json", "run_discovery"]
+__all__ = ["DiscoveryReport", "compile_goal", "run_discovery"]

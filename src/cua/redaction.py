@@ -14,7 +14,7 @@ from typing import Any
 
 SSN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 MASKED_SSN = re.compile(r"\*{3}-\*{2}-\d{4}")
-EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
+EMAIL = re.compile(r"\b[\w.+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b")  # not "capability@1.0.0"
 PHONE = re.compile(r"\(?\b\d{3}\)?[ .-]?\d{3}-\d{4}\b")
 CARD = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 MONEY = re.compile(r"-?\$\s?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|-?\$\s?\d+(?:\.\d{2})?")

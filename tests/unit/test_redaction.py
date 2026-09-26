@@ -39,6 +39,13 @@ def test_pii_patterns() -> None:
         assert leaked not in out
 
 
+def test_capability_references_are_not_mistaken_for_emails() -> None:
+    r = Redactor()
+    ref = "acmecore.member.get_share_balance@1.0.0"
+    assert r.scrub_text(f"replaying {ref}") == f"replaying {ref}"
+    assert r.scrub_text("contact ops-team@cu.example.org") == "contact <email>"
+
+
 def test_money_keeps_shape_for_the_model_only() -> None:
     r = Redactor()
     assert r.scrub_text("Balance $12,450.31", for_model=True) == "Balance $##,###.##"

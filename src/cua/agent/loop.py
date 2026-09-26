@@ -105,6 +105,7 @@ class DiscoveryAgent:
         self.guard = RuntimeGuard(session, self.checks, RuntimeGuard.outcome_rules_from_messages(app))
         self.tools = tool_definitions(list(spec.outputs))
         self.messages: list[dict[str, Any]] = []
+        self.pending_notes: list[str] = []
         self.trace: list[TraceStep] = []
         self.outputs: dict[str, Any] = {}
         self.interventions: list[InterventionRecord] = []
@@ -182,6 +183,7 @@ class DiscoveryAgent:
             if self.turns >= self.max_turns or time.monotonic() - started > self.max_seconds:
                 await self._stuck(f"budget exhausted ({self.turns} turns)", terminal=True)
                 break
+            self._flush_notes()
             try:
                 turn = await self.llm.step(system=SYSTEM, tools=self.tools, messages=self.messages)
             except Exception as e:  # noqa: BLE001 - API errors end the run with evidence
@@ -260,6 +262,18 @@ class DiscoveryAgent:
         )
 
     def _note(self, text: str) -> None:
+        """Runtime and operator notes reach the model at its next turn (see _flush_notes)."""
+        self.pending_notes.append(text)
+
+    def _flush_notes(self) -> None:
+        # A mid-conversation system message must follow a user message and be the last entry
+        # (or be followed by an assistant turn), and history must stay append-only because
+        # thinking blocks are bound to the exact prefix before them. So notes are flushed
+        # once, right before each request, when the last message is always a user message.
+        if not self.pending_notes:
+            return
+        text = "\n".join(self.pending_notes)
+        self.pending_notes = []
         if self.llm.supports_system_messages:
             self.messages.append({"role": "system", "content": text})
         else:

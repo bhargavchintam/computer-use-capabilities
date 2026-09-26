@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from packaging.version import Version
 
@@ -22,6 +22,9 @@ from .models import Capability, RunResult
 from .redaction import Redactor
 from .registry import Registry
 from .tenancy import version_in
+
+if TYPE_CHECKING:
+    from .agent.llm import LLMClient
 
 SYSTEM = """\
 You are an assistant for staff at a credit union. You answer questions by calling the provided \
@@ -101,6 +104,7 @@ async def ask(
     registry: Registry | None = None,
     runs_root: Path | None = None,
     max_turns: int = 6,
+    llm: LLMClient | None = None,
 ) -> dict[str, Any]:
     from .agent.llm import AnthropicLLM
     from .replay import run_replay
@@ -110,7 +114,7 @@ async def ask(
     app = load_app_profile(load_tenant(tenant_id).app)
     redactor = Redactor(app.sensitive_labels)
     recorder = RunRecorder(runs_root, "catalog", redactor)
-    llm = AnthropicLLM(effort="medium")
+    llm = llm or AnthropicLLM(effort="medium")
     tools = [tool_for(c) for c in caps.values()]
     recorder.save_json("catalog.json", tools)
     recorder.event("catalog_loaded", tenant=tenant_id, tools=list(caps))

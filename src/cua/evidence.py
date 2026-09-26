@@ -1,8 +1,8 @@
 """Run evidence: an append-only JSONL event log plus masked screenshots and snapshots.
 
 Everything passes through the redactor before it is written. Playwright traces
-are deliberately NOT part of evidence: they store typed values (including the
-password) and cookies. They exist only behind --debug-trace, outside the repo.
+are deliberately never recorded: they store typed values (including the
+password) and cookies, which no redaction pass could clean reliably.
 """
 
 from __future__ import annotations

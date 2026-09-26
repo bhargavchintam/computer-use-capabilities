@@ -136,7 +136,7 @@ def replay(
             tenant_id=tenant,
             inputs=_kv(input),
             approve=approve,
-            headed=headed,
+            headed=headed or None,  # default: headed only when an operator may take over
             operator=_operator(operator),
             use_overlays=not no_overlays,
             record_video=video,
@@ -180,7 +180,7 @@ def discover(
             goal=goal,
             spec=goal_spec,
             verify_inputs=_kv(verify_input),
-            headed=headed,
+            headed=headed or None,  # default: headed only when an operator may take over
             operator=_operator(operator),
             max_turns=max_turns,
             vision=not no_vision,
@@ -263,7 +263,7 @@ def caps_schema(out: Path = Path("schemas/capability.schema.json")) -> None:
 
 
 @catalog_app.command("export")
-def catalog_export(tenant: str) -> None:
+def catalog_export(tenant: Annotated[str, typer.Option(help="tenant id (config/tenants/<id>.yaml)")]) -> None:
     """Print the tool definitions a calling agent would see for this tenant."""
     from .catalog import eligible, tool_for
 
@@ -271,7 +271,9 @@ def catalog_export(tenant: str) -> None:
 
 
 @catalog_app.command("ask")
-def catalog_ask(question: str, tenant: str) -> None:
+def catalog_ask(
+    question: str, tenant: Annotated[str, typer.Option(help="tenant id (config/tenants/<id>.yaml)")]
+) -> None:
     """A small calling agent answers a question by invoking capabilities (executed by deterministic replay)."""
     from .catalog import ask
 
@@ -295,7 +297,9 @@ def _admin(tenant: str, path: str, body: dict[str, Any] | None = None) -> Any:
 
 
 @mock_app.command("serve")
-def mock_serve(tenant: str, port: int | None = None) -> None:
+def mock_serve(
+    tenant: Annotated[str, typer.Option(help="tenant id (config/tenants/<id>.yaml)")], port: int | None = None
+) -> None:
     """Serve one tenant of the mock bank (blocking)."""
     from urllib.parse import urlparse
 
@@ -310,7 +314,7 @@ def mock_serve(tenant: str, port: int | None = None) -> None:
 @mock_app.command("fault")
 def mock_fault(
     kind: Annotated[str, typer.Argument(help="maintenance | alert | error500 | slow | expire")],
-    tenant: str,
+    tenant: Annotated[str, typer.Option(help="tenant id (config/tenants/<id>.yaml)")],
     count: int = 1,
     path: Annotated[str, typer.Option(help="only requests under this path")] = "/core/",
     delay_ms: int = 0,
@@ -326,7 +330,7 @@ def mock_fault(
 
 
 @mock_app.command("reset")
-def mock_reset(tenant: str) -> None:
+def mock_reset(tenant: Annotated[str, typer.Option(help="tenant id (config/tenants/<id>.yaml)")]) -> None:
     console.print(_admin(tenant, "/__admin/reset"))
 
 

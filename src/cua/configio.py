@@ -21,6 +21,15 @@ def repo_root() -> Path:
     return Path(env) if env else Path(__file__).resolve().parents[2]
 
 
+def shown_path(path: Path | str) -> str:
+    """How a path is written into evidence: relative to the repo when inside it (no home directories)."""
+    p = Path(path).resolve()
+    try:
+        return str(p.relative_to(repo_root().resolve()))
+    except ValueError:
+        return str(p)
+
+
 def config_dir() -> Path:
     return repo_root() / "config"
 

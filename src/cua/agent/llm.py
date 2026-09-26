@@ -90,12 +90,13 @@ class AnthropicLLM:
 
 
 class ScriptedLLM:
-    """Test double: a policy maps the latest observation text to exactly one tool call."""
+    """Test double: a policy maps the latest observation text to exactly one tool call,
+    or to a plain string, which becomes the model's final text answer."""
 
     supports_system_messages = False
 
     def __init__(
-        self, policy: Callable[[str, int], tuple[str, dict[str, Any]]], model: str = "scripted"
+        self, policy: Callable[[str, int], tuple[str, dict[str, Any]] | str], model: str = "scripted"
     ) -> None:
         self.policy = policy
         self.model = model
@@ -105,25 +106,33 @@ class ScriptedLLM:
         self, *, system: str, tools: list[dict[str, Any]], messages: list[dict[str, Any]]
     ) -> LLMTurn:
         self.turn += 1
-        last = _last_text(messages)
-        name, args = self.policy(last, self.turn)
+        decision = self.policy(_last_text(messages), self.turn)
+        if isinstance(decision, str):
+            text = SimpleNamespace(type="text", text=decision)
+            return LLMTurn([text], "end_turn", self.model, f"msg_scripted_{self.turn}", {}, "")
+        name, args = decision
         block = SimpleNamespace(type="tool_use", id=f"toolu_scripted_{self.turn}", name=name, input=args)
         return LLMTurn([block], "tool_use", self.model, f"msg_scripted_{self.turn}", {}, "")
 
 
 def _last_text(messages: list[dict[str, Any]]) -> str:
+    """What the model reads last: the latest user message plus any runtime notes after it."""
+    notes: list[str] = []
     for msg in reversed(messages):
-        if msg["role"] not in ("user", "system"):
-            continue
-        content = msg["content"]
-        if isinstance(content, str):
-            return content
-        texts = []
-        for block in content:
-            if block.get("type") == "text":
-                texts.append(block["text"])
-            elif block.get("type") == "tool_result":
-                texts.extend(c["text"] for c in block.get("content", []) if c.get("type") == "text")
-        if texts:
-            return "\n".join(texts)
-    return ""
+        if msg["role"] == "system":
+            notes.insert(0, _text_of(msg["content"]))
+        elif msg["role"] == "user":
+            return "\n".join([_text_of(msg["content"]), *notes])
+    return "\n".join(notes)
+
+
+def _text_of(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    texts: list[str] = []
+    for block in content:
+        if block.get("type") == "text":
+            texts.append(block["text"])
+        elif block.get("type") == "tool_result":
+            texts.append(_text_of(block.get("content", [])))
+    return "\n".join(t for t in texts if t)

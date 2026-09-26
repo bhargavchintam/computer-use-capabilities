@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 
 import pytest
@@ -13,12 +11,6 @@ from cua.replay import run_replay
 from tests.conftest import Bank, approved
 
 pytestmark = pytest.mark.integration
-
-
-def trace_hash(result) -> str:  # type: ignore[no-untyped-def]
-    return hashlib.sha256(
-        json.dumps([(s.step_id, s.status, s.strategy) for s in result.steps]).encode()
-    ).hexdigest()
 
 
 async def test_happy_path_is_deterministic(bank: Bank, balance_cap: Capability, tmp_path: Path) -> None:
@@ -34,7 +26,7 @@ async def test_happy_path_is_deterministic(bank: Bank, balance_cap: Capability, 
     assert first.outputs["savings_balance"] == {"amount": "12450.31", "currency": "USD"}
     assert [r["share_id"] for r in first.outputs["shares"]] == ["S01", "S10", "S50"]
     assert all(s.strategy and s.strategy.endswith("#0") for s in first.steps), "primary strategies only"
-    assert trace_hash(first) == trace_hash(second)
+    assert first.trace_sha256 == second.trace_sha256
     assert first.outputs == second.outputs
 
 

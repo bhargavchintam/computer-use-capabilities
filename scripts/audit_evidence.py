@@ -9,6 +9,8 @@ every text file is parsed and searched for:
   * SSN/phone/email shapes and dollar amounts.
 PNG files are checked for embedded text metadata (pixels are masked at capture
 time; see src/cua/surface/web.py).
+
+    uv run python scripts/audit_evidence.py [DIR ...]   # default: evidence/ capabilities/
 """
 
 from __future__ import annotations
@@ -54,6 +56,13 @@ def forbidden() -> dict[str, str]:
     return values
 
 
+def _rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def scan_text(path: Path, text: str, values: dict[str, str]) -> list[str]:
     findings = []
     for value, what in values.items():
@@ -62,18 +71,18 @@ def scan_text(path: Path, text: str, values: dict[str, str]) -> list[str]:
         else:
             hit = re.search(rf"(?<![\w]){re.escape(value)}(?![\w])", text, re.I)
         if hit:
-            findings.append(f"{path.relative_to(ROOT)}: contains {what}")
+            findings.append(f"{_rel(path)}: contains {what}")
     for what, rx in PATTERNS.items():
         if rx.search(text):
-            findings.append(f"{path.relative_to(ROOT)}: {what}-shaped text")
+            findings.append(f"{_rel(path)}: {what}-shaped text")
     return findings
 
 
-def main() -> int:
+def main(bases: list[Path]) -> int:
     values = forbidden()
     findings: list[str] = []
     files = 0
-    for base in SCAN:
+    for base in bases:
         for path in sorted(p for p in base.rglob("*") if p.is_file()) if base.exists() else []:
             files += 1
             if path.suffix in TEXT:
@@ -86,7 +95,7 @@ def main() -> int:
                 findings += scan_text(path, meta, values)
             elif path.suffix not in BINARY:
                 findings.append(
-                    f"{path.relative_to(ROOT)}: file type {path.suffix or '(none)'} is not allowed in evidence"
+                    f"{_rel(path)}: file type {path.suffix or '(none)'} is not allowed in evidence"
                 )
     for f in findings:
         print("FINDING", f)
@@ -95,4 +104,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main([Path(a).resolve() for a in sys.argv[1:]] or SCAN))

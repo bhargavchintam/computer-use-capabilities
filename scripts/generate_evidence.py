@@ -4,11 +4,12 @@
     uv run python scripts/generate_evidence.py # no API key needed
 
 Uses the capabilities in the registry (the discovered, reviewed artifacts). Each
-scenario resets the mock, arms at most one fault, runs a replay, checks the
-expected classification, and copies the run folder into evidence/replay/.
+scenario resets the mock, arms at most one fault, and replays TWICE: the classified
+result and the step-trace hash must match (determinism), and the result must be the
+expected one. The first run's folder is copied into evidence/replay/.
 
     uv run python scripts/generate_evidence.py --collect runs/<run-id> discovery/01-read-flow
-copies a manual run (discovery, live handoff) into evidence/.
+copies a manual run (discovery, live handoff, catalog) into evidence/.
 """
 
 from __future__ import annotations
@@ -34,7 +35,6 @@ from cua.models import Capability, RunResult  # noqa: E402
 from cua.registry import Registry  # noqa: E402
 from cua.replay import run_replay  # noqa: E402
 
-EVIDENCE = ROOT / "evidence"
 READ, WRITE = "acmecore.member.get_share_balance", "acmecore.member.open_share"
 
 
@@ -55,7 +55,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             tenant="pinecrest",
             inputs={"member_number": "10042"},
             expect=("succeeded", None),
-            proves="happy path: typed outputs, success verified, primary locators",
+            proves="happy path: typed outputs, success checkpoint verified, primary locators only",
         ),
         dict(
             name="02-member-not-found",
@@ -63,7 +63,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             tenant="pinecrest",
             inputs={"member_number": "99999"},
             expect=("business_outcome", "MEMBER_NOT_FOUND"),
-            proves="'no such member' is a result, not a crash",
+            proves="'no such member' is a declared result with caller guidance, not a crash",
         ),
         dict(
             name="03-account-restricted",
@@ -71,7 +71,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             tenant="pinecrest",
             inputs={"member_number": "10013"},
             expect=("business_outcome", "ACCOUNT_RESTRICTED"),
-            proves="permission-type business outcome with guidance",
+            proves="permission-type business outcome; guidance says do not retry",
         ),
         dict(
             name="04-input-invalid",
@@ -79,7 +79,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             tenant="pinecrest",
             inputs={"member_number": "12AB5"},
             expect=("rejected", "INPUT_INVALID"),
-            proves="bad input rejected before the UI is touched",
+            proves="bad input rejected at pre-flight; the UI is never touched",
         ),
         dict(
             name="05-maintenance-recovered",
@@ -88,7 +88,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             inputs={"member_number": "10077"},
             fault=dict(kind="maintenance", path_prefix="/core/inquiry"),
             expect=("succeeded", None),
-            proves="known interstitial dismissed (recoverable), logged in recoveries[]",
+            proves="known interstitial dismissed by a bounded handler; logged in recoveries[]",
         ),
         dict(
             name="06-session-expired-recovered",
@@ -97,7 +97,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             inputs={"member_number": "10042"},
             fault=dict(kind="expire", path_prefix="/core/inquiry"),
             expect=("succeeded", None),
-            proves="session timeout: re-sign-on + re-drive from entry (no commit yet)",
+            proves="session timeout: deterministic re-sign-on + re-drive from entry (nothing committed yet)",
         ),
         dict(
             name="07-app-error-failure",
@@ -106,69 +106,87 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
             inputs={"member_number": "10042"},
             fault=dict(kind="error500", count=10, path_prefix="/core/inquiry"),
             expect=("failed", "APP_ERROR"),
-            proves="bounded retries, then a retryable hard failure with screenshot + snapshot",
+            proves="bounded retries, then a retryable hard failure with masked screenshot + redacted snapshot",
         ),
         dict(
-            name="08-production-draft-rejected",
+            name="08-unknown-dialog-fails-safe",
+            cap=read,
+            tenant="pinecrest",
+            inputs={"member_number": "10042"},
+            fault=dict(
+                kind="alert",
+                path_prefix="/core/inquiry",
+                message="Posting batch 7 is locked by another user.",
+            ),
+            expect=("failed", "UNRECOGNIZED_STATE"),
+            proves="an unrecognized pop-up is never guessed at: the run stops safely with evidence",
+        ),
+        dict(
+            name="09-production-draft-rejected",
             cap=draft,
             tenant="lakeside",
             inputs={"member_number": "20031"},
             expect=("rejected", "NOT_APPROVED"),
-            proves="unreviewed artifacts cannot run on a production tenant",
+            proves="an unreviewed artifact cannot run on a production tenant",
         ),
         dict(
-            name="09-tenant-b-drift-no-overlay",
+            name="10-tenant-b-drift-no-overlay",
             cap=read,
             tenant="lakeside",
             inputs={"member_number": "20031"},
             overlays=False,
             expect=("failed", "TARGET_NOT_FOUND"),
-            proves="vendor 7.3 renamed a menu item: clear drift failure with near-miss hint",
+            proves="vendor 7.3 renamed a menu item: precise drift failure with near-miss hint",
         ),
         dict(
-            name="10-tenant-b-with-overlay",
+            name="11-tenant-b-with-overlay",
             cap=read,
             tenant="lakeside",
             inputs={"member_number": "20031"},
             expect=("succeeded", None),
-            proves="same artifact + shared 7.3 overlay; fallback locator flagged as drift",
+            proves="same artifact + shared 7.3 overlay; fallback locator flagged as drift; reordered columns read by header",
         ),
     ]
     if write is not None:
-        out.append(
+        base = {"member_number": "10042", "share_type": "Holiday Club", "nickname": "Gift fund"}
+        out += [
             dict(
-                name="11-commit-needs-approval",
+                name="12-commit-parked-needs-approval",
                 cap=write,
                 tenant="pinecrest",
-                inputs={
-                    "member_number": "10042",
-                    "share_type": "Holiday Club",
-                    "initial_deposit": "250.00",
-                    "nickname": "Gift fund",
-                },
+                inputs={**base, "initial_deposit": "250.00"},
                 expect=("needs_human", None),
-                proves="commit without approval parks; nothing committed",
-            )
-        )
+                proves="a commit without approval parks as needs_human; side_effect not_committed",
+            ),
+            dict(
+                name="13-commit-with-approval",
+                cap=write,
+                tenant="pinecrest",
+                inputs={**base, "initial_deposit": "250.00"},
+                approve=True,
+                expect=("succeeded", None),
+                proves="approved commit: review page echoes every input (pre-checks), side_effect committed",
+            ),
+        ]
     return out
 
 
-def summarize(r: RunResult) -> dict[str, Any]:
+def classified(r: RunResult) -> dict[str, Any]:
     return {
         "status": r.status,
         "code": r.outcome.code if r.outcome else r.error.code if r.error else None,
         "side_effect": r.side_effect,
+        "retry_safe": r.retry_safe,
         "recoveries": [f"{x.detector}: {x.action}" for x in r.recoveries],
         "warnings": [w.code for w in r.warnings],
         "overlays": r.overlays_applied,
-        "run_id": r.run_id,
+        "trace_sha256": r.trace_sha256,
     }
 
 
-async def main(read_ref: str, write_ref: str | None) -> int:
-    reg = Registry()
-    read = reg.get(read_ref)
-    write = reg.get(write_ref) if write_ref else None
+async def main(registry: Registry, read_ref: str, write_ref: str | None, out: Path) -> int:
+    read = registry.get(read_ref)
+    write = registry.get(write_ref) if write_ref else None
     if not read.approval_valid():
         print(f"{read.ref} must be approved first (cua capabilities approve {read.ref} --reviewer <name>)")
         return 2
@@ -176,57 +194,72 @@ async def main(read_ref: str, write_ref: str | None) -> int:
     shutil.rmtree(tmp, ignore_errors=True)
     rows, failures = [], 0
     for sc in scenarios(read, write):
-        for t in ("pinecrest", "lakeside"):
-            admin(t, "/__admin/reset")
-        if "fault" in sc:
-            admin(sc["tenant"], "/__admin/faults", {"count": 1, **sc["fault"]})
-        r = await run_replay(
-            sc["cap"],
-            tenant_id=sc["tenant"],
-            inputs=sc["inputs"],
-            runs_root=tmp,
-            use_overlays=sc.get("overlays", True),
-        )
-        s = summarize(r)
-        ok = (s["status"], s["code"] if sc["expect"][1] else None) == sc["expect"]
+        runs: list[RunResult] = []
+        for _ in range(2):  # determinism: same state, same path, same result
+            for t in ("pinecrest", "lakeside"):
+                admin(t, "/__admin/reset")
+            if "fault" in sc:
+                admin(sc["tenant"], "/__admin/faults", {"count": 1, **sc["fault"]})
+            runs.append(
+                await run_replay(
+                    sc["cap"],
+                    tenant_id=sc["tenant"],
+                    inputs=sc["inputs"],
+                    approve=sc.get("approve", False),
+                    runs_root=tmp,
+                    use_overlays=sc.get("overlays", True),
+                )
+            )
+        first, second = (classified(r) for r in runs)
+        a, b = runs[0].outputs or {}, runs[1].outputs or {}
+        # a read returns the same values; a commit returns a fresh confirmation number each time
+        same_outputs = a == b if sc["cap"].contract.effects == "read_only" else a.keys() == b.keys()
+        deterministic = first == second and same_outputs
+        ok = (first["status"], first["code"] if sc["expect"][1] else None) == sc["expect"] and deterministic
         failures += not ok
-        dest = EVIDENCE / "replay" / sc["name"]
+        dest = out / "replay" / sc["name"]
         shutil.rmtree(dest, ignore_errors=True)
-        shutil.copytree(Path(r.evidence_dir or ""), dest)
+        shutil.copytree(Path(runs[0].evidence_dir or ""), dest)
         rows.append(
             {
                 "scenario": sc["name"],
                 "capability": sc["cap"].ref,
                 "tenant": sc["tenant"],
-                **s,
+                **first,
+                "runs": [r.run_id for r in runs],
+                "second_run_identical": deterministic,
                 "proves": sc["proves"],
                 "as_expected": ok,
             }
         )
         print(
-            f"{'OK ' if ok else 'BAD'} {sc['name']:32} {s['status']:17} {s['code'] or '':22} {s['side_effect']}"
+            f"{'OK ' if ok else 'BAD'} {sc['name']:34} {first['status']:17} {first['code'] or '':20} "
+            f"{first['side_effect']:14} x2 identical={deterministic}"
         )
-    (EVIDENCE / "replay" / "summary.json").write_text(json.dumps(rows, indent=2) + "\n")
+    (out / "replay" / "summary.json").write_text(json.dumps(rows, indent=2) + "\n")
     lines = [
-        "| scenario | tenant | status | code | side effect | recoveries / warnings | what it proves |",
-        "|---|---|---|---|---|---|---|",
+        "| scenario | tenant | status | code | side effect | recoveries / warnings | 2nd run identical | what it proves |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         extra = "; ".join(row["recoveries"] + row["warnings"]) or "-"
         lines.append(
-            f"| `{row['scenario']}` | {row['tenant']} | **{row['status']}** | {row['code'] or '-'} | "
-            f"{row['side_effect']} | {extra} | {row['proves']} |"
+            f"| [`{row['scenario']}`]({row['scenario']}/) | {row['tenant']} | **{row['status']}** | "
+            f"{row['code'] or '-'} | {row['side_effect']} | {extra} | "
+            f"{'yes' if row['second_run_identical'] else '**NO**'} (`{row['trace_sha256'][:12]}`) | {row['proves']} |"
         )
-    (EVIDENCE / "replay" / "SUMMARY.md").write_text("\n".join(lines) + "\n")
+    (out / "replay" / "SUMMARY.md").write_text("\n".join(lines) + "\n")
     shutil.rmtree(tmp, ignore_errors=True)
+    for t in ("pinecrest", "lakeside"):
+        admin(t, "/__admin/reset")
     return 1 if failures else 0
 
 
-def collect(run_dir: str, name: str) -> int:
+def collect(run_dir: str, name: str, out: Path) -> int:
     src = Path(run_dir)
-    dest = EVIDENCE / name
+    dest = out / name
     shutil.rmtree(dest, ignore_errors=True)
-    shutil.copytree(src, dest)
+    shutil.copytree(src, dest, ignore=shutil.ignore_patterns("video", "*.zip"))
     print(f"copied {src} -> {dest}")
     return 0
 
@@ -235,12 +268,17 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--read", default=READ)
     ap.add_argument("--write", default=WRITE)
+    ap.add_argument(
+        "--registry", type=Path, default=None, help="capability registry (default: capabilities/)"
+    )
+    ap.add_argument("--out", type=Path, default=ROOT / "evidence", help="evidence root (default: evidence/)")
     ap.add_argument("--collect", nargs=2, metavar=("RUN_DIR", "NAME"))
     args = ap.parse_args()
     if args.collect:
-        sys.exit(collect(*args.collect))
+        sys.exit(collect(*args.collect, args.out))
+    reg = Registry(args.registry)
     try:
-        Registry().get(args.write)
+        reg.get(args.write)
     except LookupError:
         args.write = None
-    sys.exit(asyncio.run(main(args.read, args.write)))
+    sys.exit(asyncio.run(main(reg, args.read, args.write, args.out)))

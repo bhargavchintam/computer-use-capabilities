@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal, get_args
 
 from .checks import Checks, strategy_dicts
-from .configio import load_app_profile, load_overlays, load_policy, load_tenant, repo_root
+from .configio import load_app_profile, load_overlays, load_policy, load_tenant, repo_root, shown_path
 from .control import ControlLost, ControlState, DecisionKind, InterventionKind, SessionController
 from .control import Resolution as Handoff
 from .evidence import RunRecorder, utcnow
@@ -838,7 +838,7 @@ async def run_replay(
     tenant_id: str,
     inputs: dict[str, str],
     approve: bool = False,
-    headed: bool = False,
+    headed: bool | None = None,
     operator: OperatorMode = "none",
     operator_hook: OperatorHook | None = None,
     use_overlays: bool = True,
@@ -862,6 +862,7 @@ async def run_replay(
         result.duration_ms = int((time.monotonic() - t0) * 1000)
         result.evidence_dir = str(recorder.dir)
         persisted = result.model_copy(deep=True)
+        persisted.evidence_dir = shown_path(recorder.dir)
         if persisted.outputs:
             specs = cap.contract.outputs
             persisted.outputs = {
@@ -946,7 +947,7 @@ async def run_replay(
         redactor=redactor,
         recorder=recorder,
         controller=controller,
-        headed=headed or operator == "console",
+        headed=operator == "console" if headed is None else headed,  # a person needs a window to take over
         record_video=record_video,
     )
     engine = ReplayEngine(

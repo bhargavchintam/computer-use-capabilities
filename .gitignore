@@ -5,7 +5,6 @@
 
 # Local run output (evidence/ holds the curated, audited copies)
 runs/
-debug-traces/
 .mock_pids
 
 # Python / tooling
