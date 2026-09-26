@@ -508,7 +508,19 @@ class DiscoveryAgent:
             headers: list[str] = next(
                 (c["strategy"]["headers"] for c in d["candidates"] if c["strategy"]["kind"] == "table"), []
             )
-            columns = _map_columns(list(spec.columns or {}), headers)
+            wanted = list(spec.columns or {})
+            given = {c["output_column"]: c["header"] for c in a.get("columns") or [] if isinstance(c, dict)}
+            if given:
+                unknown = [h for h in given.values() if h not in headers]
+                missing = [c for c in wanted if c not in given]
+                if unknown or missing:
+                    return await self._error(
+                        f"column mapping problem: headers {unknown} not in table {headers}; "
+                        f"unmapped output columns {missing}"
+                    )
+                columns = {c: given[c] for c in wanted}
+            else:
+                columns = _map_columns(wanted, headers)
             if columns is None:
                 return await self._error(
                     f"cannot map output columns {list(spec.columns or {})} to table headers {headers}"
@@ -720,7 +732,8 @@ class DiscoveryAgent:
 
 
 def _map_columns(wanted: list[str], headers: list[str]) -> dict[str, str] | None:
-    """Map output column names (share_id) onto table headers ("Share ID")."""
+    """Fallback when the model gives no mapping: exact snake_case match, else the single best
+    token overlap. Ties are ambiguous and refused rather than guessed."""
     out: dict[str, str] = {}
     by_snake = {_snake(h): h for h in headers}
     for col in wanted:
@@ -728,10 +741,10 @@ def _map_columns(wanted: list[str], headers: list[str]) -> dict[str, str] | None
             out[col] = by_snake[col]
             continue
         tokens = set(col.split("_"))
-        best = max(headers, key=lambda h: len(tokens & set(_snake(h).split("_"))), default=None)
-        if best is None or not tokens & set(_snake(best).split("_")):
+        scored = sorted(((len(tokens & set(_snake(h).split("_"))), h) for h in headers), reverse=True)
+        if not scored or scored[0][0] == 0 or (len(scored) > 1 and scored[1][0] == scored[0][0]):
             return None
-        out[col] = best
+        out[col] = scored[0][1]
     return out
 
 

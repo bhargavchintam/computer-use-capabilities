@@ -51,8 +51,22 @@ def tool_definitions(output_names: list[str]) -> list[dict[str, Any]]:
         _tool(
             "record_output",
             "Bind one requested output to the element that holds it (a table cell, a labelled value, "
-            "or a whole table for list outputs). You do not need to read the value.",
-            {"name": {"type": "string", "enum": output_names}, "ref": REF, "reason": REASON},
+            "or a whole table for list outputs). You do not need to read the value. For a list output, map "
+            "each of its columns to the table header that holds it; for a single value pass an empty list.",
+            {
+                "name": {"type": "string", "enum": output_names},
+                "ref": REF,
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"output_column": {"type": "string"}, "header": {"type": "string"}},
+                        "required": ["output_column", "header"],
+                        "additionalProperties": False,
+                    },
+                },
+                "reason": REASON,
+            },
         ),
         _tool(
             "report_outcome",
