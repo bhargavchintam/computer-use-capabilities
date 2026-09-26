@@ -392,24 +392,32 @@ class WebSurface:
             await el.click(timeout=timeout_ms)
         except PWError as e:
             raise _classify(e) from e
+        finally:
+            self._last_nav = time.monotonic()  # an action may start a navigation a few ms later
 
     async def fill(self, el: ElementHandle, value: str, timeout_ms: int = 3000) -> None:
         try:
             await el.fill(value, timeout=timeout_ms)
         except PWError as e:
             raise _classify(e) from e
+        finally:
+            self._last_nav = time.monotonic()  # an action may start a navigation a few ms later
 
     async def select(self, el: ElementHandle, label: str, timeout_ms: int = 3000) -> None:
         try:
             await el.select_option(label=label, timeout=timeout_ms)
         except PWError as e:
             raise _classify(e) from e
+        finally:
+            self._last_nav = time.monotonic()  # an action may start a navigation a few ms later
 
     async def press(self, el: ElementHandle, key: str, timeout_ms: int = 3000) -> None:
         try:
             await el.press(key, timeout=timeout_ms)
         except PWError as e:
             raise _classify(e) from e
+        finally:
+            self._last_nav = time.monotonic()  # an action may start a navigation a few ms later
 
     # ------------------------------------------------------------------ evidence
     async def screenshot(

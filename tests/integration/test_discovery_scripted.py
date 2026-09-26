@@ -152,6 +152,90 @@ async def test_discovered_capability_generalizes_to_another_tenant_via_overlay(
     assert r.outputs and r.outputs["savings_balance"]["amount"] == "18300.75"
 
 
+WRITE_SPEC = GoalSpec(
+    capability_id="member.open_share",
+    title="Open a new share for a member",
+    goal="Open a new {{share_type}} share for member {{member_number}} with an initial deposit of "
+    "{{initial_deposit}} and nickname {{nickname}}; return the confirmation number and new share id",
+    inputs={
+        "member_number": InputSpec(type="string", description="Member number", pattern="^[0-9]{5}$",
+                                   sensitivity="pii_identifier"),
+        "share_type": InputSpec(type="string", description="Share product", sensitivity="internal"),
+        "initial_deposit": InputSpec(type="money", description="Opening deposit", sensitivity="confidential"),
+        "nickname": InputSpec(type="string", description="Share nickname", sensitivity="internal"),
+    },
+    outputs={
+        "confirmation_number": OutputSpec(type="identifier", description="Receipt confirmation number"),
+        "new_share_id": OutputSpec(type="identifier", description="Id of the new share"),
+    },
+    sample_inputs={"member_number": "10042", "share_type": "Holiday Club", "initial_deposit": "250.00",
+                   "nickname": "Gift fund"},
+)
+
+
+def write_policy() -> Any:
+    done: set[str] = set()
+
+    def policy(text: str, turn: int) -> tuple[str, dict[str, Any]]:
+        def ref(pattern: str) -> str | None:
+            m = re.search(r"\[(e\d+)\][^\n]*?" + pattern, text)
+            return m.group(1) if m else None
+
+        def field(label: str) -> str | None:
+            m = re.search(re.escape(label) + r" \[(e\d+)\]", text)
+            return m.group(1) if m else None
+
+        if "**Share Opened**" in text:
+            for out, label in (("confirmation_number", "Confirmation #:"), ("new_share_id", "New Share ID:")):
+                if out not in done:
+                    done.add(out)
+                    return "record_output", {"name": out, "ref": field(label), "columns": [], "reason": f"Read {label}"}
+            return "finish", {"summary": "Share opened", "success_ref": ref(r"\*\*Share Opened\*\*")}
+        if "**Review New Share**" in text:
+            return "click", {"ref": ref(r'button "Confirm"'), "reason": "Confirm opening the share"}
+        if "**Open New Share**" in text:
+            m = re.search(r'\[(e\d+)\] combobox label="Share Type:" value="([^"]*)"', text)
+            if m and m.group(2) != "{{share_type}}":
+                return "select_option", {"ref": m.group(1), "option": "{{share_type}}", "reason": "Choose the type"}
+            for label, placeholder in (("Initial Deposit:", "{{initial_deposit}}"), ("Nickname:", "{{nickname}}")):
+                m = re.search(rf'\[(e\d+)\] textbox label="{re.escape(label)}" value="([^"]*)"', text)
+                if m and not m.group(2):
+                    return "type_text", {"ref": m.group(1), "text": placeholder, "reason": f"Enter {label}"}
+            return "click", {"ref": ref(r'button "Continue"'), "reason": "Continue to review"}
+        if "**Member Summary**" in text:
+            return "click", {"ref": ref(r'link "Open New Share"'), "reason": "Open the New Share form"}
+        box = re.search(r'\[(e\d+)\] textbox label="Member #:" value="([^"]*)"', text)
+        if box and not box.group(2):
+            return "type_text", {"ref": box.group(1), "text": "{{member_number}}", "reason": "Enter the member number"}
+        if box:
+            return "click", {"ref": ref(r'button "Search"'), "reason": "Run the search"}
+        return "click", {"ref": ref(r'link "Member Inquiry"'), "reason": "Open Member Inquiry"}
+
+    return policy
+
+
+async def test_write_flow_discovery_with_operator_approval(bank: Bank, tmp_path: Path) -> None:
+    from tests.helpers import scripted_operator
+
+    report = await run_discovery(
+        tenant_id="pinecrest", spec=WRITE_SPEC, llm=ScriptedLLM(write_policy()), runs_root=tmp_path / "runs",
+        registry=Registry(tmp_path / "registry"), operator="scripted",
+        operator_hook=scripted_operator(approval="approve"),
+        verify_inputs={"initial_deposit": "100.00", "nickname": "Verify run"},
+    )
+    assert report.status == "succeeded" and report.capability, report
+    assert report.interventions and report.interventions[0].kind == "approval"
+    cap = load_model(Path(report.capability_path or ""), Capability)
+    confirm = next(s for s in cap.implementation.steps if s.effect == "commit")
+    assert confirm.id == "click_confirm"
+    assert {c.text_visible.text.param for c in confirm.pre} == {  # type: ignore[union-attr]
+        "member_number", "share_type", "initial_deposit", "nickname"}
+    assert cap.contract.effects == "commit" and not cap.contract.idempotent
+    assert "INSUFFICIENT_FUNDS" in cap.contract.outcomes and "MEMBER_NOT_FOUND" in cap.contract.outcomes
+    receipts = bank.state("pinecrest")["receipts"]
+    assert len(receipts) == 2  # discovery commit + verify-by-replay commit (sandbox, operator-approved)
+
+
 def test_replay_never_needs_the_model_sdk(bank: Bank, tmp_path: Path) -> None:
     fixture = ROOT / "tests/fixtures/capabilities/acmecore/acmecore.member.get_share_balance/1.0.0.yaml"
     code = f"""

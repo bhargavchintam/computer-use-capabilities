@@ -12,8 +12,9 @@ import asyncio
 import base64
 import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 from ..checks import Checks, money_variants
 from ..control import ControlLost, SessionController
@@ -34,6 +35,7 @@ from .prompts import SYSTEM, goal_message
 from .tools import tool_definitions
 
 AgentStatus = Literal["succeeded", "business_outcome", "needs_human", "failed"]
+T = TypeVar("T")
 
 
 @dataclass
@@ -375,9 +377,10 @@ class DiscoveryAgent:
                 await self.surface.press(el, key or "Enter")
         if effect == "commit":
             self.committed = True
-        notes = await self._settle_and_guard(baseline)
-        blocks = await self.observe()
-        after = await self._state()
+        # The action happened: from here on it is always recorded, even if the page is slow to settle.
+        notes = await self._when_ready(lambda: self._settle_and_guard(baseline)) or []
+        blocks = await self._when_ready(self.observe) or [{"type": "text", "text": "(page still loading)"}]
+        after = await self._when_ready(self._state)
         step = TraceStep(
             index=len(self.trace),
             actor="agent",
@@ -397,6 +400,15 @@ class DiscoveryAgent:
         self._track_progress(action, d, before, after)
         head = "Done." + (" " + " ".join(notes) if notes else "")
         return ToolResult([{"type": "text", "text": head}, *blocks])
+
+    async def _when_ready(self, fn: Callable[[], Awaitable[T]], attempts: int = 25) -> T | None:
+        """Retry while the page is mid-navigation; give up quietly (the caller still records)."""
+        for _ in range(attempts):
+            try:
+                return await fn()
+            except NotReady:
+                await asyncio.sleep(0.2)
+        return None
 
     async def _frame_of(self, ref: str) -> Any:
         assert self.snap is not None
@@ -722,10 +734,12 @@ class DiscoveryAgent:
         elif len(self.last_actions) >= 3 and len(set(self.last_actions[-3:])) == 1:
             await self._stuck("the same action was repeated three times")
 
-    def _track_progress(self, action: str, d: dict[str, Any], before: PageState, after: PageState) -> None:
+    def _track_progress(
+        self, action: str, d: dict[str, Any], before: PageState, after: PageState | None
+    ) -> None:
         fp = f"{action}:{d.get('role')}:{d.get('name') or d.get('label')}"
         self.last_actions.append((fp, str(before.key())))
-        if action in ("click", "press_key") and not after.changed_containers(before):
+        if action in ("click", "press_key") and after is not None and not after.changed_containers(before):
             self.no_progress += 1
         else:
             self.no_progress = 0
