@@ -80,11 +80,13 @@ class WebSurface:
         headed: bool = False,
         viewport: tuple[int, int] = (1280, 860),
         video_dir: Path | None = None,
+        device_scale_factor: float | None = None,  # headless only; tests emulate HiDPI screens
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.headed = headed
         self.viewport = viewport
         self.video_dir = video_dir
+        self.device_scale_factor = device_scale_factor
         # Hooks installed by the runtime.
         self.on_dialog: Callable[[str, str], Awaitable[DialogDecision]] | None = None
         self.on_capture: Callable[[dict[str, Any], list[str]], None] | None = None
@@ -118,6 +120,8 @@ class WebSurface:
             ctx_kwargs["no_viewport"] = True  # the operator can resize the real window
         else:
             ctx_kwargs["viewport"] = {"width": w, "height": h}
+            if self.device_scale_factor:
+                ctx_kwargs["device_scale_factor"] = self.device_scale_factor
         if self.video_dir:
             ctx_kwargs["record_video_dir"] = str(self.video_dir)
             ctx_kwargs["record_video_size"] = {"width": w, "height": h}
@@ -519,7 +523,9 @@ class WebSurface:
                 return None
             await self.page.wait_for_timeout(250)
         try:
-            png = await self.page.screenshot(style=MASK_CSS, animations="disabled", caret="hide")
+            # scale="css": one image pixel per CSS pixel, so the painted boxes (computed in CSS
+            # pixels) land on the values on any display, including 2x (Retina) headed windows.
+            png = await self.page.screenshot(style=MASK_CSS, animations="disabled", caret="hide", scale="css")
         except PWError as e:
             err = _classify(e)
             if isinstance(err, SessionLost):

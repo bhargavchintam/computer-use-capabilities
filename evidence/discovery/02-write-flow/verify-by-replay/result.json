@@ -1,0 +1,121 @@
+{
+  "run_id": "20260926T102530Z-replay-e966cc",
+  "mode": "replay",
+  "capability": "acmecore.share.open_share_account@1.0.0",
+  "tenant": "pinecrest",
+  "effective_plan_sha256": "80fd8d233423dc7d1fbf55c33c482277db446b7730f4efe69f6df63105e1f53c",
+  "overlays_applied": [],
+  "status": "succeeded",
+  "outputs": {
+    "confirmation_number": "CNQPEPT4RS",
+    "share_id": {
+      "redacted": "pii_identifier",
+      "digest": "f170d0883f00"
+    }
+  },
+  "outcome": null,
+  "error": null,
+  "side_effect": "committed",
+  "retry_safe": false,
+  "recoveries": [],
+  "warnings": [],
+  "interventions": [
+    {
+      "id": "iv-103520ed",
+      "kind": "approval",
+      "reason": "step click_confirm is a commit (Confirm to open the new share as requested); it needs an explicit approval",
+      "step_id": "click_confirm",
+      "decision": "approve",
+      "operator": "operator",
+      "note": null,
+      "requested_at": "2026-09-26T10:25:37.923Z",
+      "resolved_at": "2026-09-26T10:25:47.109Z",
+      "human_actions": []
+    }
+  ],
+  "parked": null,
+  "steps": [
+    {
+      "step_id": "click_member_inquiry",
+      "status": "done",
+      "strategy": "role_name#0",
+      "attempts": 1,
+      "duration_ms": 620
+    },
+    {
+      "step_id": "fill_member_number",
+      "status": "done",
+      "strategy": "label#0",
+      "attempts": 1,
+      "duration_ms": 571
+    },
+    {
+      "step_id": "click_search",
+      "status": "done",
+      "strategy": "role_name#0",
+      "attempts": 1,
+      "duration_ms": 571
+    },
+    {
+      "step_id": "click_open_new_share",
+      "status": "done",
+      "strategy": "role_name#0",
+      "attempts": 1,
+      "duration_ms": 583
+    },
+    {
+      "step_id": "select_share_type",
+      "status": "done",
+      "strategy": "label#0",
+      "attempts": 1,
+      "duration_ms": 572
+    },
+    {
+      "step_id": "fill_initial_deposit",
+      "status": "done",
+      "strategy": "label#0",
+      "attempts": 1,
+      "duration_ms": 564
+    },
+    {
+      "step_id": "fill_nickname",
+      "status": "done",
+      "strategy": "label#0",
+      "attempts": 1,
+      "duration_ms": 555
+    },
+    {
+      "step_id": "click_continue",
+      "status": "done",
+      "strategy": "role_name#0",
+      "attempts": 1,
+      "duration_ms": 575
+    },
+    {
+      "step_id": "click_confirm",
+      "status": "done",
+      "strategy": "role_name#0",
+      "attempts": 1,
+      "duration_ms": 9949
+    },
+    {
+      "step_id": "extract_confirmation_number",
+      "status": "done",
+      "strategy": "label#0",
+      "attempts": 1,
+      "duration_ms": 14
+    },
+    {
+      "step_id": "extract_share_id",
+      "status": "done",
+      "strategy": "label#0",
+      "attempts": 1,
+      "duration_ms": 6
+    }
+  ],
+  "started_at": "2026-09-26T10:25:30.982Z",
+  "finished_at": "2026-09-26T10:25:48.058Z",
+  "duration_ms": 17075,
+  "evidence_dir": "runs/20260926T102530Z-replay-e966cc",
+  "path_sha256": "b6aa5ca8edca0ba8ebbc455df1d3f973cd8da520ff0267a2948b842f9c314cd0"
+}

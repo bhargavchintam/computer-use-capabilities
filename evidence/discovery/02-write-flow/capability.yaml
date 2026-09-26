@@ -1,0 +1,556 @@
+schema_version: '1.0'
+id: acmecore.share.open_share_account
+version: 1.0.0
+status: draft
+title: Open New Share Account for Member
+description: |-
+  Discovered for: Open a new {{share_product}} share for member {{member_number}} with an initial deposit of {{initial_deposit}} and the nickname {{nickname}}, and return the confirmation number and the new share ID
+  Flow: Open Member Inquiry to find the member and share options -> Enter member number to search -> Search for the member -> Proceed to the Open New Share form -> Select requested share product -> Enter the initial deposit amount -> Enter the member-facing nickname -> Continue to the confirmation step -> Confirm to open the new share as requested -> Bind the confirmation number from the success screen -> Bind the new share ID from the success screen
+contract:
+  inputs:
+    member_number:
+      type: string
+      description: Member number of the account holder for whom the share is opened
+      pattern: ^[0-9]{5}$
+      sensitivity: pii_identifier
+      required: true
+    share_product:
+      type: enum
+      description: Share product type to open
+      enum:
+      - Holiday Club
+      - Vacation Club
+      sensitivity: internal
+      required: true
+    initial_deposit:
+      type: money
+      description: Initial deposit amount funding the new share
+      sensitivity: confidential
+      required: true
+    nickname:
+      type: string
+      description: Member-facing nickname/label for the new share
+      sensitivity: internal
+      required: true
+  outputs:
+    confirmation_number:
+      type: identifier
+      description: Confirmation number returned by the core for the share opening transaction
+      sensitivity: internal
+    share_id:
+      type: identifier
+      description: Identifier of the newly opened share account
+      sensitivity: pii_identifier
+  outcomes:
+    MEMBER_NOT_FOUND:
+      description: No member exists with this member number.
+      caller_guidance: Ask the user to double-check the member number. Safe to retry with a corrected number.
+      retry_safe: true
+    INPUT_REJECTED_BY_APP:
+      description: The application rejected the member number format.
+      caller_guidance: Correct the member number (digits only) and retry.
+      retry_safe: true
+    ACCOUNT_RESTRICTED:
+      description: The member record is restricted (e.g. an employee account) for this operator.
+      caller_guidance: Retrying will not help; route the request to staff with supervisor access.
+      retry_safe: true
+    INSUFFICIENT_FUNDS:
+      description: The funding share does not have enough available balance.
+      caller_guidance: Tell the user the available balance is too low; retry with a smaller amount.
+      retry_safe: true
+    INVALID_AMOUNT:
+      description: The application rejected the deposit amount.
+      caller_guidance: Correct the amount (positive, at most two decimals) and retry.
+      retry_safe: true
+    INVALID_NICKNAME:
+      description: The nickname contains characters the application does not accept.
+      caller_guidance: Use letters, numbers and spaces only (max 20) and retry.
+      retry_safe: true
+    REQUEST_ALREADY_PROCESSED:
+      description: The application refused a repeated submission.
+      caller_guidance: Do not retry. Check the member's shares first; the earlier submission may have succeeded.
+      retry_safe: false
+    APPROVAL_DENIED:
+      description: A human operator declined the commit step; nothing was committed.
+      caller_guidance: Tell the user staff declined the request. Do not retry without new instructions.
+      retry_safe: true
+  effects: commit
+  idempotent: false
+  example:
+    input:
+      member_number: <string>
+      share_product: <enum>
+      initial_deposit: <money>
+      nickname: <string>
+    output:
+      confirmation_number: <identifier>
+      share_id: <identifier>
+implementation:
+  app:
+    product: acmecore
+    versions: '>=7.2,<8.0'
+    surface: web
+  entry:
+    route: /core/main
+  preconditions:
+  - authenticated_session
+  steps:
+  - id: click_member_inquiry
+    intent: Open Member Inquiry to find the member and share options
+    action: click
+    effect: read
+    target:
+      container:
+      - frame:nav
+      strategies:
+      - kind: role_name
+        role: link
+        name: Member Inquiry
+      - kind: attr
+        tag: a
+        attrs:
+          href: /core/inquiry
+      fingerprint:
+        tag: a
+        role: link
+        name: Member Inquiry
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(2) > td:nth-of-type(1)
+          > a:nth-of-type(1)
+        bbox:
+        - 10.0
+        - 34.0
+        - 90.0
+        - 15.0
+    expect:
+    - document_changed:
+        container:
+        - frame:work
+    - text_visible:
+        container:
+        - frame:work
+        text: Member Inquiry
+    timeout_ms: 10000
+    provenance: agent
+  - id: fill_member_number
+    intent: Enter member number to search
+    action: fill
+    effect: input
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: label
+        role: textbox
+        label: 'Member #:'
+      - kind: attr
+        tag: input
+        attrs:
+          name: txtMbr
+      fingerprint:
+        tag: input
+        role: textbox
+        name: ''
+        label: 'Member #:'
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(2)
+          > input:nth-of-type(1)
+        bbox:
+        - 88.0
+        - 50.0
+        - 80.0
+        - 22.0
+    value:
+      param: member_number
+    expect:
+    - field_value:
+        equals:
+          param: member_number
+    timeout_ms: 10000
+    provenance: agent
+  - id: click_search
+    intent: Search for the member
+    action: click
+    effect: read
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: role_name
+        role: button
+        name: Search
+      - kind: attr
+        tag: input
+        attrs:
+          name: btnSrch
+      fingerprint:
+        tag: input
+        role: button
+        name: Search
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(3) > td:nth-of-type(2)
+          > input:nth-of-type(1)
+        bbox:
+        - 88.0
+        - 105.0
+        - 58.0
+        - 22.0
+    expect:
+    - document_changed:
+        container:
+        - frame:work
+    - text_visible:
+        container:
+        - frame:work
+        text: Member Summary
+    timeout_ms: 10000
+    provenance: agent
+  - id: click_open_new_share
+    intent: Proceed to the Open New Share form
+    action: click
+    effect: read
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: role_name
+        role: link
+        name: Open New Share
+      fingerprint:
+        tag: a
+        role: link
+        name: Open New Share
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > a:nth-of-type(1)
+        bbox:
+        - 10.0
+        - 274.0
+        - 114.0
+        - 15.0
+    expect:
+    - document_changed:
+        container:
+        - frame:work
+    - text_visible:
+        container:
+        - frame:work
+        text: Open New Share
+    timeout_ms: 10000
+    provenance: agent
+  - id: select_share_type
+    intent: Select requested share product
+    action: select
+    effect: input
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: label
+        role: combobox
+        label: 'Share Type:'
+      - kind: attr
+        tag: select
+        attrs:
+          name: ddlType
+      fingerprint:
+        tag: select
+        role: combobox
+        name: ''
+        label: 'Share Type:'
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(2)
+          > select:nth-of-type(1)
+        bbox:
+        - 104.0
+        - 50.0
+        - 142.0
+        - 19.0
+    value:
+      param: share_product
+    timeout_ms: 10000
+    provenance: agent
+  - id: fill_initial_deposit
+    intent: Enter the initial deposit amount
+    action: fill
+    effect: input
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: label
+        role: textbox
+        label: 'Initial Deposit:'
+      - kind: attr
+        tag: input
+        attrs:
+          name: txtAmt
+      fingerprint:
+        tag: input
+        role: textbox
+        name: ''
+        label: 'Initial Deposit:'
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(2) > td:nth-of-type(2)
+          > input:nth-of-type(1)
+        bbox:
+        - 104.0
+        - 75.0
+        - 94.0
+        - 22.0
+    value:
+      param: initial_deposit
+    expect:
+    - field_value:
+        equals:
+          param: initial_deposit
+    timeout_ms: 10000
+    provenance: agent
+  - id: fill_nickname
+    intent: Enter the member-facing nickname
+    action: fill
+    effect: input
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: label
+        role: textbox
+        label: 'Nickname:'
+      - kind: attr
+        tag: input
+        attrs:
+          name: txtNick
+      fingerprint:
+        tag: input
+        role: textbox
+        name: ''
+        label: 'Nickname:'
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(3) > td:nth-of-type(2)
+          > input:nth-of-type(1)
+        bbox:
+        - 104.0
+        - 102.0
+        - 147.0
+        - 22.0
+    value:
+      param: nickname
+    expect:
+    - field_value:
+        equals:
+          param: nickname
+    timeout_ms: 10000
+    provenance: agent
+  - id: click_continue
+    intent: Continue to the confirmation step
+    action: click
+    effect: read
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: role_name
+        role: button
+        name: Continue
+      - kind: attr
+        tag: input
+        attrs:
+          name: btnCont
+      fingerprint:
+        tag: input
+        role: button
+        name: Continue
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(4) > td:nth-of-type(2)
+          > input:nth-of-type(1)
+        bbox:
+        - 104.0
+        - 130.0
+        - 69.0
+        - 22.0
+    expect:
+    - document_changed:
+        container:
+        - frame:work
+    - text_visible:
+        container:
+        - frame:work
+        text: Review New Share
+    timeout_ms: 10000
+    provenance: agent
+  - id: click_confirm
+    intent: Confirm to open the new share as requested
+    action: click
+    effect: commit
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: role_name
+        role: button
+        name: Confirm
+      - kind: attr
+        tag: input
+        attrs:
+          name: btnConfirm
+      fingerprint:
+        tag: input
+        role: button
+        name: Confirm
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > input:nth-of-type(2)
+        bbox:
+        - 10.0
+        - 213.0
+        - 63.0
+        - 22.0
+    pre:
+    - field_value:
+        target:
+          container:
+          - frame:work
+          strategies:
+          - kind: label
+            role: cell
+            label: 'Member #:'
+        equals:
+          param: member_number
+    - field_value:
+        target:
+          container:
+          - frame:work
+          strategies:
+          - kind: label
+            role: cell
+            label: 'Share Type:'
+        equals:
+          param: share_product
+    - field_value:
+        target:
+          container:
+          - frame:work
+          strategies:
+          - kind: label
+            role: cell
+            label: 'Initial Deposit:'
+        equals:
+          param: initial_deposit
+    - field_value:
+        target:
+          container:
+          - frame:work
+          strategies:
+          - kind: label
+            role: cell
+            label: 'Nickname:'
+        equals:
+          param: nickname
+    expect:
+    - document_changed:
+        container:
+        - frame:work
+    - text_visible:
+        container:
+        - frame:work
+        text: Share Opened
+    timeout_ms: 10000
+    provenance: agent
+  - id: extract_confirmation_number
+    intent: Bind the confirmation number from the success screen
+    action: extract
+    effect: read
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: label
+        role: cell
+        label: 'Confirmation #:'
+      fingerprint:
+        tag: td
+        role: cell
+        label: 'Confirmation #:'
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(2)
+        bbox:
+        - 115.0
+        - 79.0
+        - 95.0
+        - 24.0
+    output: confirmation_number
+    parse: identifier
+    timeout_ms: 10000
+    provenance: agent
+  - id: extract_share_id
+    intent: Bind the new share ID from the success screen
+    action: extract
+    effect: read
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: label
+        role: cell
+        label: 'New Share ID:'
+      fingerprint:
+        tag: td
+        role: cell
+        label: 'New Share ID:'
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(3) > td:nth-of-type(2)
+        bbox:
+        - 115.0
+        - 126.0
+        - 95.0
+        - 24.0
+    output: share_id
+    parse: identifier
+    timeout_ms: 10000
+    provenance: agent
+  outcome_detectors:
+    MEMBER_NOT_FOUND:
+      ref: member_not_found
+    INPUT_REJECTED_BY_APP:
+      ref: member_number_invalid
+    ACCOUNT_RESTRICTED:
+      ref: account_restricted
+    INSUFFICIENT_FUNDS:
+      ref: insufficient_funds
+    INVALID_AMOUNT:
+      ref: invalid_amount
+    INVALID_NICKNAME:
+      ref: invalid_nickname
+    REQUEST_ALREADY_PROCESSED:
+      ref: request_already_processed
+  success:
+    all_of:
+    - text_visible:
+        container:
+        - frame:work
+        text: Share Opened
+    - field_value:
+        target:
+          container:
+          - frame:work
+          strategies:
+          - kind: label
+            role: cell
+            label: 'Member #:'
+        equals:
+          param: member_number
+    - outputs_present:
+      - confirmation_number
+      - share_id
+provenance:
+  source: discovery
+  recorded_at: '2026-09-26T10:25:30Z'
+  goal: Open a new {{share_product}} share for member {{member_number}} with an initial deposit of {{initial_deposit}}
+    and the nickname {{nickname}}, and return the confirmation number and the new share ID
+  run_id: 20260926T102413Z-discovery-2e38e3
+  model: claude-opus-5
+  tenant: pinecrest
+  environment: sandbox
+  trace_sha256: e8dcd46dcbd68c7ff0d41d5802464f7cbe8ea142edceda555db307024a089cfa
+  verified_by_runs:
+  - 20260926T102530Z-replay-e966cc
+  notes:
+  - 'input ''share_product'': dropped values the dropdown does not offer'

@@ -1,0 +1,316 @@
+[
+  {
+    "scenario": "01-success",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "succeeded",
+    "code": null,
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "041964665dfb5e2786c29136666f1259c228f025c45f43f5ed82c2b1bb32ca88",
+    "runs": [
+      "20260926T231104Z-replay-105de8",
+      "20260926T231108Z-replay-0abe85"
+    ],
+    "second_run_identical": true,
+    "proves": "happy path: typed outputs, success checkpoint verified, primary locators only",
+    "as_expected": true
+  },
+  {
+    "scenario": "02-member-not-found",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "business_outcome",
+    "code": "MEMBER_NOT_FOUND",
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "fd95481a38ad8745a6258fed5779bfe7bfb66b5525cc141c4587e2b6afd18d55",
+    "runs": [
+      "20260926T231111Z-replay-c62c02",
+      "20260926T231114Z-replay-2ff43b"
+    ],
+    "second_run_identical": true,
+    "proves": "'no such member' is a declared result with caller guidance, not a crash",
+    "as_expected": true
+  },
+  {
+    "scenario": "03-account-restricted",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "business_outcome",
+    "code": "ACCOUNT_RESTRICTED",
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "fd95481a38ad8745a6258fed5779bfe7bfb66b5525cc141c4587e2b6afd18d55",
+    "runs": [
+      "20260926T231118Z-replay-04ad6c",
+      "20260926T231121Z-replay-6a8dd9"
+    ],
+    "second_run_identical": true,
+    "proves": "permission-type business outcome; guidance says retrying will not help",
+    "as_expected": true
+  },
+  {
+    "scenario": "04-no-savings-share",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "business_outcome",
+    "code": "OUTPUT_NOT_PRESENT",
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "a88688ff0981d16752ad0923f0d0332a5c71da00612139e6f3deeacd5fdbdd27",
+    "runs": [
+      "20260926T231124Z-replay-f7f265",
+      "20260926T231127Z-replay-90544a"
+    ],
+    "second_run_identical": true,
+    "proves": "a checking-only member: the keyed row is missing, which is an answer, not UI drift",
+    "as_expected": true
+  },
+  {
+    "scenario": "05-input-invalid",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "rejected",
+    "code": "INPUT_INVALID",
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "runs": [
+      "20260926T231130Z-replay-84e47a",
+      "20260926T231131Z-replay-979939"
+    ],
+    "second_run_identical": true,
+    "proves": "bad input rejected at pre-flight; the UI is never touched",
+    "as_expected": true
+  },
+  {
+    "scenario": "06-maintenance-recovered",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "succeeded",
+    "code": null,
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [
+      "maintenance_notice: clicked the acknowledge control"
+    ],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "041964665dfb5e2786c29136666f1259c228f025c45f43f5ed82c2b1bb32ca88",
+    "runs": [
+      "20260926T231131Z-replay-c103c1",
+      "20260926T231134Z-replay-b6af85"
+    ],
+    "second_run_identical": true,
+    "proves": "known interstitial dismissed by a bounded handler; logged in recoveries[]",
+    "as_expected": true
+  },
+  {
+    "scenario": "07-session-expired-recovered",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "succeeded",
+    "code": null,
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [
+      "session_expired: signed on again",
+      "session_expired: re-driving the flow from the entry route"
+    ],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "041964665dfb5e2786c29136666f1259c228f025c45f43f5ed82c2b1bb32ca88",
+    "runs": [
+      "20260926T231137Z-replay-ae21d5",
+      "20260926T231142Z-replay-ec83cf"
+    ],
+    "second_run_identical": true,
+    "proves": "session timeout: deterministic re-sign-on + re-drive from entry (nothing committed yet)",
+    "as_expected": true
+  },
+  {
+    "scenario": "08-app-error-failure",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "failed",
+    "code": "APP_ERROR",
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [
+      "server_error: re-driving the flow from the entry route",
+      "server_error: re-driving the flow from the entry route"
+    ],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "295b1edf9e9eb8210fe85800dccfd9f5817b77c620b796e792120bc218224876",
+    "runs": [
+      "20260926T231147Z-replay-0cbc1d",
+      "20260926T231151Z-replay-6e5078"
+    ],
+    "second_run_identical": true,
+    "proves": "bounded retries, then a transient hard failure with masked screenshot + redacted snapshot",
+    "as_expected": true
+  },
+  {
+    "scenario": "09-unknown-dialog-fails-safe",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "pinecrest",
+    "status": "failed",
+    "code": "UNRECOGNIZED_STATE",
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "295b1edf9e9eb8210fe85800dccfd9f5817b77c620b796e792120bc218224876",
+    "runs": [
+      "20260926T231154Z-replay-23f8e0",
+      "20260926T231156Z-replay-603ef8"
+    ],
+    "second_run_identical": true,
+    "proves": "an unrecognized pop-up is never guessed at: the run stops safely with evidence",
+    "as_expected": true
+  },
+  {
+    "scenario": "10-production-draft-rejected",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "lakeside",
+    "status": "rejected",
+    "code": "NOT_APPROVED",
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [
+      "acmecore-7.3"
+    ],
+    "path_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "runs": [
+      "20260926T231158Z-replay-7b332e",
+      "20260926T231158Z-replay-8d5ff0"
+    ],
+    "second_run_identical": true,
+    "proves": "an unreviewed artifact cannot run on a production tenant",
+    "as_expected": true
+  },
+  {
+    "scenario": "11-tenant-b-drift-no-overlay",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "lakeside",
+    "status": "failed",
+    "code": "TARGET_NOT_FOUND",
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "295b1edf9e9eb8210fe85800dccfd9f5817b77c620b796e792120bc218224876",
+    "runs": [
+      "20260926T231158Z-replay-a83934",
+      "20260926T231210Z-replay-b3d7ef"
+    ],
+    "second_run_identical": true,
+    "proves": "vendor 7.3 renamed a menu item: precise drift failure with near-miss hint",
+    "as_expected": true
+  },
+  {
+    "scenario": "12-tenant-b-with-overlay",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "tenant": "lakeside",
+    "status": "succeeded",
+    "code": null,
+    "side_effect": "none",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [
+      "FALLBACK_LOCATOR_USED"
+    ],
+    "overlays": [
+      "acmecore-7.3"
+    ],
+    "path_sha256": "cbcc33f4c1114cb0ef8837bee7c0257d8b16d290276f89164d173dc1579be31a",
+    "runs": [
+      "20260926T231222Z-replay-969fbb",
+      "20260926T231225Z-replay-3c4e6f"
+    ],
+    "second_run_identical": true,
+    "proves": "same artifact + approved 7.3 overlay; fallback locator flagged as drift; columns read by header",
+    "as_expected": true
+  },
+  {
+    "scenario": "13-commit-parked-needs-approval",
+    "capability": "acmecore.share.open_share_account@1.0.0",
+    "tenant": "pinecrest",
+    "status": "needs_human",
+    "code": null,
+    "side_effect": "not_committed",
+    "retry_safe": true,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "8f745907ab09bf1e1af07f7f1cf04c688cf568596e5b8f915d9c82601462583c",
+    "runs": [
+      "20260926T231229Z-replay-fa0f8d",
+      "20260926T231235Z-replay-f62218"
+    ],
+    "second_run_identical": true,
+    "proves": "a commit without approval parks as needs_human; side_effect not_committed",
+    "as_expected": true
+  },
+  {
+    "scenario": "14-commit-with-approval",
+    "capability": "acmecore.share.open_share_account@1.0.0",
+    "tenant": "pinecrest",
+    "status": "succeeded",
+    "code": null,
+    "side_effect": "committed",
+    "retry_safe": false,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "b6aa5ca8edca0ba8ebbc455df1d3f973cd8da520ff0267a2948b842f9c314cd0",
+    "runs": [
+      "20260926T231241Z-replay-4351a8",
+      "20260926T231248Z-replay-f435e7"
+    ],
+    "second_run_identical": true,
+    "proves": "approved commit: each input checked against its field on the review page; committed",
+    "as_expected": true
+  },
+  {
+    "scenario": "15-commit-response-lost",
+    "capability": "acmecore.share.open_share_account@1.0.0",
+    "tenant": "pinecrest",
+    "status": "failed",
+    "code": "TIMEOUT",
+    "side_effect": "unknown",
+    "retry_safe": false,
+    "recoveries": [],
+    "warnings": [],
+    "overlays": [],
+    "path_sha256": "813edb467a04e078d30486c0e2bad865e04847c4619611a0a90bcc88f9bbe67b",
+    "runs": [
+      "20260926T231255Z-replay-d58a5c",
+      "20260926T231312Z-replay-99671d"
+    ],
+    "second_run_identical": true,
+    "proves": "the bank committed but the answer never came: side_effect unknown, never retried",
+    "as_expected": true
+  }
+]

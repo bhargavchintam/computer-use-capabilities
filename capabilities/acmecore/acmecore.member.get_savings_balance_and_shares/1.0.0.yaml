@@ -1,0 +1,295 @@
+schema_version: '1.0'
+id: acmecore.member.get_savings_balance_and_shares
+version: 1.0.0
+status: approved
+title: Look Up Member Savings Balance and Share List
+description: |-
+  Discovered for: Look up member {{member_number}} and read their current savings balance and their list of shares
+  Flow: Open Member Inquiry to look up the member -> Enter member number for lookup -> Search for the member record -> Primary savings share balance is the member's savings balance -> Map requested share columns to table headers
+contract:
+  inputs:
+    member_number:
+      type: string
+      description: The member number used to look up the member record in AcmeCore
+      pattern: ^[0-9]{5}$
+      sensitivity: pii_identifier
+      required: true
+  outputs:
+    savings_balance:
+      type: money
+      description: Current savings balance for the member
+      currency: USD
+      sensitivity: confidential
+    shares:
+      type: table
+      description: List of share accounts held by the member
+      columns:
+        share_id: identifier
+        share_type: string
+        description: string
+        balance: money
+      sensitivity: confidential
+  outcomes:
+    MEMBER_NOT_FOUND:
+      description: No member exists with this member number.
+      caller_guidance: Ask the user to double-check the member number. Safe to retry with a corrected number.
+      retry_safe: true
+    INPUT_REJECTED_BY_APP:
+      description: The application rejected the member number format.
+      caller_guidance: Correct the member number (digits only) and retry.
+      retry_safe: true
+    ACCOUNT_RESTRICTED:
+      description: The member record is restricted (e.g. an employee account) for this operator.
+      caller_guidance: Retrying will not help; route the request to staff with supervisor access.
+      retry_safe: true
+    OUTPUT_NOT_PRESENT:
+      description: The record has no entry for a requested value (no row with the recorded key).
+      caller_guidance: Tell the user the record has no such entry. This is an answer, not an error.
+      retry_safe: true
+  effects: read_only
+  idempotent: true
+  example:
+    input:
+      member_number: <string>
+    output:
+      savings_balance:
+        amount: <decimal>
+        currency: USD
+      shares:
+      - share_id: <identifier>
+        share_type: <string>
+        description: <string>
+        balance:
+          amount: <decimal>
+          currency: USD
+implementation:
+  app:
+    product: acmecore
+    versions: '>=7.2,<8.0'
+    surface: web
+  entry:
+    route: /core/main
+  preconditions:
+  - authenticated_session
+  steps:
+  - id: click_member_inquiry
+    intent: Open Member Inquiry to look up the member
+    action: click
+    effect: read
+    target:
+      container:
+      - frame:nav
+      strategies:
+      - kind: role_name
+        role: link
+        name: Member Inquiry
+      - kind: attr
+        tag: a
+        attrs:
+          href: /core/inquiry
+      fingerprint:
+        tag: a
+        role: link
+        name: Member Inquiry
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(2) > td:nth-of-type(1)
+          > a:nth-of-type(1)
+        bbox:
+        - 10.0
+        - 33.0
+        - 90.0
+        - 15.0
+    expect:
+    - document_changed:
+        container:
+        - frame:work
+    - text_visible:
+        container:
+        - frame:work
+        text: Member Inquiry
+    timeout_ms: 10000
+    provenance: agent
+  - id: fill_member_number
+    intent: Enter member number for lookup
+    action: fill
+    effect: input
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: label
+        role: textbox
+        label: 'Member #:'
+      - kind: attr
+        tag: input
+        attrs:
+          name: txtMbr
+      fingerprint:
+        tag: input
+        role: textbox
+        name: ''
+        label: 'Member #:'
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(2)
+          > input:nth-of-type(1)
+        bbox:
+        - 88.0
+        - 49.0
+        - 83.0
+        - 21.0
+    value:
+      param: member_number
+    expect:
+    - field_value:
+        equals:
+          param: member_number
+    timeout_ms: 10000
+    provenance: agent
+  - id: click_search
+    intent: Search for the member record
+    action: click
+    effect: read
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: role_name
+        role: button
+        name: Search
+      - kind: attr
+        tag: input
+        attrs:
+          name: btnSrch
+      fingerprint:
+        tag: input
+        role: button
+        name: Search
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > form:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(3) > td:nth-of-type(2)
+          > input:nth-of-type(1)
+        bbox:
+        - 88.0
+        - 103.0
+        - 58.0
+        - 21.0
+    expect:
+    - document_changed:
+        container:
+        - frame:work
+    - text_visible:
+        container:
+        - frame:work
+        text: Member Summary
+    timeout_ms: 10000
+    provenance: agent
+  - id: extract_savings_balance
+    intent: Primary savings share balance is the member's savings balance
+    action: extract
+    effect: read
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: table_cell
+        headers:
+        - Description
+        - Balance
+        row:
+          column: Description
+          equals: PRIMARY SAVINGS
+        column: Balance
+      - kind: table_cell
+        headers:
+        - Share ID
+        - Balance
+        row:
+          column: Share ID
+          equals: S01
+        column: Balance
+      fingerprint:
+        tag: td
+        role: cell
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > table:nth-of-type(2) > tbody:nth-of-type(1) > tr:nth-of-type(2) > td:nth-of-type(3)
+        bbox:
+        - 243.0
+        - 171.0
+        - 73.0
+        - 23.0
+    output: savings_balance
+    parse: money
+    timeout_ms: 10000
+    provenance: agent
+  - id: extract_shares
+    intent: Map requested share columns to table headers
+    action: extract_table
+    effect: read
+    target:
+      container:
+      - frame:work
+      strategies:
+      - kind: table
+        headers:
+        - Share ID
+        - Description
+        - Balance
+        - Available
+        - Status
+      fingerprint:
+        tag: table
+        role: table
+        css_path: body:nth-of-type(1) > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)
+          > table:nth-of-type(2)
+        bbox:
+        - 10.0
+        - 147.0
+        - 428.0
+        - 94.0
+    output: shares
+    columns:
+      share_id: Share ID
+      share_type: Description
+      description: Description
+      balance: Balance
+    timeout_ms: 10000
+    provenance: agent
+  outcome_detectors:
+    MEMBER_NOT_FOUND:
+      ref: member_not_found
+    INPUT_REJECTED_BY_APP:
+      ref: member_number_invalid
+    ACCOUNT_RESTRICTED:
+      ref: account_restricted
+  success:
+    all_of:
+    - text_visible:
+        container:
+        - frame:work
+        text: Member Summary
+    - field_value:
+        target:
+          container:
+          - frame:work
+          strategies:
+          - kind: label
+            role: cell
+            label: 'Member #:'
+        equals:
+          param: member_number
+    - outputs_present:
+      - savings_balance
+      - shares
+provenance:
+  source: discovery
+  recorded_at: '2026-09-26T10:23:34Z'
+  goal: Look up member {{member_number}} and read their current savings balance and their list of shares
+  run_id: 20260926T102236Z-discovery-536d4c
+  model: claude-opus-5
+  tenant: pinecrest
+  environment: sandbox
+  trace_sha256: 0926e78b8257bafbd79d53788cc0fc6a732bfc155b397e58fcb92dfd7a04e03b
+  verified_by_runs:
+  - 20260926T102334Z-replay-0d2eee
+approval:
+  approved_by: Bindu Bhargava Reddy Chintam
+  approved_at: '2026-09-26T10:26:20Z'
+  content_sha256: 5ba27af704c84178689a94aae6df085d1355c6d13b2991a71d8e18575b3f79f9

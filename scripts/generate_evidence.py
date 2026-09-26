@@ -35,7 +35,8 @@ from cua.models import Capability, RunResult  # noqa: E402
 from cua.registry import Registry  # noqa: E402
 from cua.replay import run_replay  # noqa: E402
 
-READ, WRITE = "acmecore.member.get_share_balance", "acmecore.member.open_share"
+# The capabilities discovered by the real model (see evidence/discovery/).
+READ, WRITE = "acmecore.member.get_savings_balance_and_shares", "acmecore.share.open_share_account"
 
 
 def admin(tenant: str, path: str, body: dict[str, Any] | None = None) -> None:
@@ -157,7 +158,7 @@ def scenarios(read: Capability, write: Capability | None) -> list[dict[str, Any]
         ),
     ]
     if write is not None:
-        base = {"member_number": "10042", "share_type": "Holiday Club", "nickname": "Gift fund"}
+        base = {"member_number": "10042", "share_product": "Holiday Club", "nickname": "Gift fund"}
         confirm = "/core/member/10042/newshare/confirm"
         out += [
             dict(
@@ -277,10 +278,17 @@ async def main(registry: Registry, read_ref: str, write_ref: str | None, out: Pa
 
 def collect(run_dir: str, name: str, out: Path) -> int:
     src = Path(run_dir)
-    dest = out / name
+    root = out.resolve()
+    dest = (out / name).resolve()
+    if not name.strip() or dest == root or root not in dest.parents:
+        print(f"refusing: {name!r} must name a folder inside {out}")  # never replace the evidence root
+        return 2
+    if not (src / "events.jsonl").is_file():
+        print(f"refusing: {src} is not a run folder")
+        return 2
     shutil.rmtree(dest, ignore_errors=True)
     shutil.copytree(src, dest, ignore=shutil.ignore_patterns("video", "*.zip"))
-    print(f"copied {src} -> {dest}")
+    print(f"copied {src} -> {dest.relative_to(root.parent)}")
     return 0
 
 

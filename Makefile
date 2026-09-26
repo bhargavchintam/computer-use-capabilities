@@ -36,11 +36,11 @@ evidence:       ## regenerate deterministic replay evidence (needs `make mock`),
 audit:
 	uv run python scripts/audit_evidence.py
 
-demo:           ## offline demo: replay the committed capability (needs `make mock`; no API key)
-	uv run cua replay acmecore.member.get_share_balance --tenant pinecrest -i member_number=10042
-	uv run cua replay acmecore.member.get_share_balance --tenant pinecrest -i member_number=99999 || true
-	uv run cua replay acmecore.member.get_share_balance --tenant lakeside -i member_number=20031 --no-overlays || true
-	uv run cua replay acmecore.member.get_share_balance --tenant lakeside -i member_number=20031
+demo:           ## offline demo: replay the discovered capabilities (needs `make mock`; no API key)
+	uv run cua replay acmecore.member.get_savings_balance_and_shares --tenant pinecrest -i member_number=10042
+	uv run cua replay acmecore.member.get_savings_balance_and_shares --tenant pinecrest -i member_number=99999 || true
+	uv run cua replay acmecore.member.get_savings_balance_and_shares --tenant lakeside -i member_number=20031 --no-overlays || true
+	uv run cua replay acmecore.member.get_savings_balance_and_shares --tenant lakeside -i member_number=20031
 
 clean:
 	rm -rf runs .pytest_cache .ruff_cache

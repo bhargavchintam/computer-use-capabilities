@@ -1,0 +1,3 @@
+{"seq": 1, "ts": "2026-09-26T23:11:58.866Z", "run_id": "20260926T231158Z-replay-7b332e", "type": "run_started", "mode": "replay", "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0", "tenant": "lakeside", "environment": "production", "approve": false, "operator": "none"}
+{"seq": 2, "ts": "2026-09-26T23:11:58.867Z", "run_id": "20260926T231158Z-replay-7b332e", "type": "rejected", "code": "NOT_APPROVED", "message": "acmecore.member.get_savings_balance_and_shares@1.0.0 is not approved for production (status is draft)"}
+{"seq": 3, "ts": "2026-09-26T23:11:58.867Z", "run_id": "20260926T231158Z-replay-7b332e", "type": "run_finished", "status": "rejected", "side_effect": "none", "code": "NOT_APPROVED"}

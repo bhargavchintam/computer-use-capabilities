@@ -779,17 +779,22 @@ class ReplayEngine:
     ) -> Handoff:
         shot = await self.session.screenshot(f"escalation-{step.id}")
         excerpt = await self.session.excerpt()
-        handoff = await self.controller.escalate(
-            kind=kind,
-            reason=reason,
-            allowed=allowed,
-            capability=self.cap.ref,
-            step_id=step.id,
-            step_intent=step.intent,
-            proposed_action=proposed,
-            screenshot=shot,
-            snapshot_excerpt=excerpt,
-        )
+        self.controller.step_done_probe = lambda: self._step_done(step)
+        try:
+            handoff = await self.controller.escalate(
+                kind=kind,
+                reason=reason,
+                allowed=allowed,
+                capability=self.cap.ref,
+                step_id=step.id,
+                step_intent=step.intent,
+                done_when="; ".join(describe(c) for c in step.expect) or None,
+                proposed_action=proposed,
+                screenshot=shot,
+                snapshot_excerpt=excerpt,
+            )
+        finally:
+            self.controller.step_done_probe = None
         self._record_intervention(handoff)
         if handoff.kind in ("parked", "timeout"):
             raise await self._parked(handoff, step)
@@ -798,6 +803,18 @@ class ReplayEngine:
                 "ABORTED_BY_OPERATOR", f"operator {handoff.request.operator} aborted the run", step=step
             )
         return handoff
+
+    async def _step_done(self, step: Step) -> bool:
+        """Read-only: does the page now show the step's checkpoint? (Shown to the operator.)"""
+        if not step.expect:
+            return False
+        try:
+            for c in step.expect:
+                if not await self.checks.holds(c, step_target=step.target, before_docs=self.step_docs):
+                    return False
+        except Exception:  # noqa: BLE001 - a page mid-navigation just is not done yet
+            return False
+        return True
 
     async def _parked(self, handoff: Handoff, step: Step) -> _Stop:
         """Nobody resolved the request in time (or no operator is connected). If a person held
@@ -903,7 +920,11 @@ class ReplayEngine:
     async def _implicit_handback(
         self, step: Step, before_docs: dict[tuple[str, ...], str] | None
     ) -> Literal["completed_by_human", "retry"]:
-        handoff = await self.controller.wait_for_handback()
+        self.controller.step_done_probe = lambda: self._step_done(step)
+        try:
+            handoff = await self.controller.wait_for_handback()
+        finally:
+            self.controller.step_done_probe = None
         self._record_intervention(handoff)
         if handoff.kind == "abort":
             raise await self._fail("ABORTED_BY_OPERATOR", "operator aborted the run", step=step)

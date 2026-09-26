@@ -1,0 +1,25 @@
+{
+  "id": "iv-81fe4c81",
+  "run_id": "20260926T103005Z-replay-235bca",
+  "kind": "human_required",
+  "reason": "Supervisor Override Required This transaction exceeds your approval limit of <money>.",
+  "capability": "acmecore.share.open_share_account@1.0.0",
+  "goal": null,
+  "step_id": "click_confirm",
+  "step_intent": "Confirm to open the new share as requested",
+  "proposed_action": null,
+  "screenshot": "screenshots/001-escalation-click_confirm.png",
+  "snapshot_excerpt": "== top (frameset) /core/main\n== frame:banner /core/banner\n  [e1] **Pinecrest Community CU (demo)**\n  AcmeCore 7.2.4 | Operator: <secret:operator_id> | 09/26/2026 |\n  [e2] link \"Sign Off\"\n== frame:nav /core/nav\n  [e3] **Menu**\n  [e4] link \"Member Inquiry\"\n  [e5] link \"Teller Drawer\"\n  [e6] link \"Reports\"\n  [e7] link \"GL Inquiry\"\n== frame:work /core/member/<member_number:…42>/newshare/confirm\n  [e8] **Supervisor Override Required**\n  [e9] !! This transaction exceeds your approval limit of <money>.\n  A supervisor must enter their PIN to approve it.\n  Supervisor PIN:\n  [e10] textbox label=\"Supervisor PIN:\" value=\"\"\n  [e11] button \"Approve\"\n  [e12] button \"Cancel\"",
+  "allowed_decisions": [
+    "take_control",
+    "abort"
+  ],
+  "requested_at": "2026-09-26T10:30:13.976Z",
+  "deadline": "2026-09-26T10:45:13Z",
+  "status": "expired",
+  "decision": null,
+  "operator": "local-operator",
+  "note": null,
+  "resolved_at": null,
+  "human_actions": []
+}

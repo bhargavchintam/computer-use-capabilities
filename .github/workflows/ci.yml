@@ -7,7 +7,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -15,7 +15,7 @@ jobs:
         run: |
           uv sync
           uv run playwright install --with-deps chromium
-      - name: Lint
+      - name: Lint and types
         run: |
           uv run ruff check src tests mock_bank scripts
           uv run ruff format --check src tests mock_bank scripts
@@ -24,3 +24,9 @@ jobs:
         run: uv run pytest -q
       - name: Audit published evidence and artifacts for secrets / PII
         run: uv run python scripts/audit_evidence.py
+      - name: Replay the committed, discovered capabilities on a fresh machine (15 scenarios, each twice)
+        run: |
+          cp .env.example .env
+          make mock
+          uv run python scripts/generate_evidence.py --out "$RUNNER_TEMP/evidence"
+          uv run python scripts/audit_evidence.py "$RUNNER_TEMP/evidence"

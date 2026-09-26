@@ -1,0 +1,77 @@
+{
+  "run_id": "20260926T231222Z-replay-969fbb",
+  "mode": "replay",
+  "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+  "tenant": "lakeside",
+  "effective_plan_sha256": "ff11bdbee36afd87cab8f47f49cde0ac3c9e703abf9ef7b3c9e1db05aa72549c",
+  "overlays_applied": [
+    "acmecore-7.3"
+  ],
+  "status": "succeeded",
+  "outputs": {
+    "savings_balance": {
+      "redacted": "confidential",
+      "digest": "a3df50d0b02b"
+    },
+    "shares": {
+      "redacted": "confidential",
+      "digest": "1db6059951b5"
+    }
+  },
+  "outcome": null,
+  "error": null,
+  "side_effect": "none",
+  "retry_safe": true,
+  "recoveries": [],
+  "warnings": [
+    {
+      "code": "FALLBACK_LOCATOR_USED",
+      "step_id": "click_search",
+      "detail": "primary role_name strategy matched 0 elements; used attr (strategy 2). Possible UI drift."
+    }
+  ],
+  "interventions": [],
+  "parked": null,
+  "steps": [
+    {
+      "step_id": "click_member_inquiry",
+      "status": "done",
+      "strategy": "role_name#0",
+      "attempts": 1,
+      "duration_ms": 607
+    },
+    {
+      "step_id": "fill_member_number",
+      "status": "done",
+      "strategy": "label#0",
+      "attempts": 1,
+      "duration_ms": 572
+    },
+    {
+      "step_id": "click_search",
+      "status": "done",
+      "strategy": "attr#1",
+      "attempts": 1,
+      "duration_ms": 582
+    },
+    {
+      "step_id": "extract_savings_balance",
+      "status": "done",
+      "strategy": "table_cell#0",
+      "attempts": 1,
+      "duration_ms": 12
+    },
+    {
+      "step_id": "extract_shares",
+      "status": "done",
+      "strategy": "table#0",
+      "attempts": 1,
+      "duration_ms": 6
+    }
+  ],
+  "started_at": "2026-09-26T23:12:22.394Z",
+  "finished_at": "2026-09-26T23:12:25.674Z",
+  "duration_ms": 3280,
+  "evidence_dir": "runs/_evidence_tmp/20260926T231222Z-replay-969fbb",
+  "path_sha256": "cbcc33f4c1114cb0ef8837bee7c0257d8b16d290276f89164d173dc1579be31a"
+}

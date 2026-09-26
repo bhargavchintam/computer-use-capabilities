@@ -1,0 +1,38 @@
+{
+  "run_id": "20260926T231158Z-replay-7b332e",
+  "mode": "replay",
+  "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+  "tenant": "lakeside",
+  "effective_plan_sha256": "ff11bdbee36afd87cab8f47f49cde0ac3c9e703abf9ef7b3c9e1db05aa72549c",
+  "overlays_applied": [
+    "acmecore-7.3"
+  ],
+  "status": "rejected",
+  "outputs": null,
+  "outcome": null,
+  "error": {
+    "code": "NOT_APPROVED",
+    "message": "acmecore.member.get_savings_balance_and_shares@1.0.0 is not approved for production (status is draft)",
+    "step_id": null,
+    "step_intent": null,
+    "expected": null,
+    "observed": null,
+    "transient": false,
+    "reason": null,
+    "hint": null,
+    "near_misses": [],
+    "evidence": []
+  },
+  "side_effect": "none",
+  "retry_safe": true,
+  "recoveries": [],
+  "warnings": [],
+  "interventions": [],
+  "parked": null,
+  "steps": [],
+  "started_at": "2026-09-26T23:11:58.866Z",
+  "finished_at": "2026-09-26T23:11:58.867Z",
+  "duration_ms": 0,
+  "evidence_dir": "runs/_evidence_tmp/20260926T231158Z-replay-7b332e",
+  "path_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+}

@@ -1,0 +1,417 @@
+[
+  {
+    "index": 0,
+    "actor": "agent",
+    "action": "click",
+    "container": [
+      "frame:nav"
+    ],
+    "target": {
+      "role": "link",
+      "name": "Member Inquiry",
+      "label": "",
+      "tag": "a"
+    },
+    "strategies": [
+      {
+        "kind": "role_name",
+        "role": "link",
+        "name": "Member Inquiry"
+      },
+      {
+        "kind": "attr",
+        "tag": "a",
+        "attrs": {
+          "href": "/core/inquiry"
+        }
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": null,
+    "reason": "Open Member Inquiry to look up the member",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/welcome",
+        "Welcome"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Inquiry"
+      ]
+    ]
+  },
+  {
+    "index": 1,
+    "actor": "agent",
+    "action": "fill",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "textbox",
+      "name": "",
+      "label": "Member #:",
+      "tag": "input"
+    },
+    "strategies": [
+      {
+        "kind": "label",
+        "role": "textbox",
+        "label": "Member #:"
+      },
+      {
+        "kind": "attr",
+        "tag": "input",
+        "attrs": {
+          "name": "txtMbr"
+        }
+      }
+    ],
+    "effect": "input",
+    "value": "{{member_number}}",
+    "key": null,
+    "output": null,
+    "reason": "Enter member number for lookup",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Inquiry"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Inquiry"
+      ]
+    ]
+  },
+  {
+    "index": 2,
+    "actor": "agent",
+    "action": "click",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "button",
+      "name": "Search",
+      "label": "",
+      "tag": "input"
+    },
+    "strategies": [
+      {
+        "kind": "role_name",
+        "role": "button",
+        "name": "Search"
+      },
+      {
+        "kind": "attr",
+        "tag": "input",
+        "attrs": {
+          "name": "btnSrch"
+        }
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": null,
+    "reason": "Search for the member record",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Inquiry"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Summary"
+      ]
+    ]
+  },
+  {
+    "index": 3,
+    "actor": "agent",
+    "action": "extract",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "cell",
+      "name": "<money>",
+      "label": "",
+      "tag": "td"
+    },
+    "strategies": [
+      {
+        "kind": "table_cell",
+        "headers": [
+          "Share ID",
+          "Balance"
+        ],
+        "row": {
+          "column": "Share ID",
+          "equals": "S01"
+        },
+        "column": "Balance"
+      },
+      {
+        "kind": "table_cell",
+        "headers": [
+          "Description",
+          "Balance"
+        ],
+        "row": {
+          "column": "Description",
+          "equals": "PRIMARY SAVINGS"
+        },
+        "column": "Balance"
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": "savings_balance",
+    "reason": "Primary savings share balance is the member's savings balance",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Summary"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Summary"
+      ]
+    ]
+  },
+  {
+    "index": 4,
+    "actor": "agent",
+    "action": "extract_table",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "table",
+      "name": "",
+      "label": "",
+      "tag": "table"
+    },
+    "strategies": [
+      {
+        "kind": "table",
+        "headers": [
+          "Share ID",
+          "Description",
+          "Balance",
+          "Available",
+          "Status"
+        ]
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": "shares",
+    "reason": "Map requested share columns to table headers",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Summary"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Summary"
+      ]
+    ]
+  }
+]

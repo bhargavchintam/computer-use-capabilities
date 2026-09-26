@@ -1,0 +1,67 @@
+{
+  "run_id": "20260926T231111Z-replay-c62c02",
+  "mode": "replay",
+  "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+  "tenant": "pinecrest",
+  "effective_plan_sha256": "a4bb0e75f7543c16df0d4fd85a75b59694b1b71c5145680bc0729ea95cf5522b",
+  "overlays_applied": [],
+  "status": "business_outcome",
+  "outputs": null,
+  "outcome": {
+    "code": "MEMBER_NOT_FOUND",
+    "description": "No member exists with this member number.",
+    "caller_guidance": "Ask the user to double-check the member number. Safe to retry with a corrected number.",
+    "retry_safe": true,
+    "message": "No member found for Member # <member_number:…99>.",
+    "step_id": "click_search"
+  },
+  "error": null,
+  "side_effect": "none",
+  "retry_safe": true,
+  "recoveries": [],
+  "warnings": [],
+  "interventions": [],
+  "parked": null,
+  "steps": [
+    {
+      "step_id": "click_member_inquiry",
+      "status": "done",
+      "strategy": "role_name#0",
+      "attempts": 1,
+      "duration_ms": 596
+    },
+    {
+      "step_id": "fill_member_number",
+      "status": "done",
+      "strategy": "label#0",
+      "attempts": 1,
+      "duration_ms": 574
+    },
+    {
+      "step_id": "click_search",
+      "status": "outcome",
+      "strategy": null,
+      "attempts": 1,
+      "duration_ms": 313
+    },
+    {
+      "step_id": "extract_savings_balance",
+      "status": "not_run",
+      "strategy": null,
+      "attempts": 0,
+      "duration_ms": 0
+    },
+    {
+      "step_id": "extract_shares",
+      "status": "not_run",
+      "strategy": null,
+      "attempts": 0,
+      "duration_ms": 0
+    }
+  ],
+  "started_at": "2026-09-26T23:11:11.862Z",
+  "finished_at": "2026-09-26T23:11:14.940Z",
+  "duration_ms": 3077,
+  "evidence_dir": "runs/_evidence_tmp/20260926T231111Z-replay-c62c02",
+  "path_sha256": "fd95481a38ad8745a6258fed5779bfe7bfb66b5525cc141c4587e2b6afd18d55"
+}

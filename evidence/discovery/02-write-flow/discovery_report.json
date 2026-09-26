@@ -1,0 +1,45 @@
+{
+  "run_id": "20260926T102413Z-discovery-2e38e3",
+  "status": "succeeded",
+  "code": null,
+  "message": null,
+  "goal": "Open a new {{share_product}} share for member {{member_number}} with an initial deposit of {{initial_deposit}} and the nickname {{nickname}}, and return the confirmation number and the new share ID",
+  "capability": "acmecore.share.open_share_account@1.0.0",
+  "capability_path": "capabilities/acmecore/acmecore.share.open_share_account/1.0.0.yaml",
+  "verification": {
+    "run_id": "20260926T102530Z-replay-e966cc",
+    "status": "succeeded",
+    "side_effect": "committed",
+    "error": null,
+    "evidence_dir": "runs/20260926T102530Z-replay-e966cc"
+  },
+  "compile_notes": [
+    "input 'share_product': dropped values the dropdown does not offer"
+  ],
+  "lint_findings": [],
+  "turns": 12,
+  "models": [
+    "claude-opus-5"
+  ],
+  "usage": {
+    "cache_creation_input_tokens": 55659,
+    "cache_read_input_tokens": 371670,
+    "input_tokens": 24,
+    "output_tokens": 1359
+  },
+  "interventions": [
+    {
+      "id": "iv-f4bcbfd6",
+      "kind": "approval",
+      "reason": "discovery wants to perform a commit: button \"Confirm\"",
+      "step_id": null,
+      "decision": "approve",
+      "operator": "operator",
+      "note": null,
+      "requested_at": "2026-09-26T10:25:13.871Z",
+      "resolved_at": "2026-09-26T10:25:21.161Z",
+      "human_actions": []
+    }
+  ],
+  "evidence_dir": "runs/20260926T102413Z-discovery-2e38e3"
+}

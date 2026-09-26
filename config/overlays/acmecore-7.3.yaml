@@ -33,10 +33,56 @@ capabilities:
             container:
             - frame:work
             text: Member Lookup
+  acmecore.member.get_savings_balance_and_shares:
+    steps:
+      click_member_inquiry:
+        target:
+          container:
+          - frame:nav
+          strategies:
+          - kind: role_name
+            role: link
+            name: Member Lookup
+          - kind: attr
+            tag: a
+            attrs:
+              href: /cu/lookup
+        expect:
+        - document_changed:
+            container:
+            - frame:work
+        - text_visible:
+            container:
+            - frame:work
+            text: Member Lookup
+  acmecore.share.open_share_account:
+    steps:
+      click_member_inquiry:
+        target:
+          container:
+          - frame:nav
+          strategies:
+          - kind: role_name
+            role: link
+            name: Member Lookup
+          - kind: attr
+            tag: a
+            attrs:
+              href: /cu/lookup
+        expect:
+        - document_changed:
+            container:
+            - frame:work
+        - text_visible:
+            container:
+            - frame:work
+            text: Member Lookup
 labels:
   share_type:
     Holiday Club: Christmas Club
+  share_product:
+    Holiday Club: Christmas Club
 approval:
   approved_by: Bindu Bhargava Reddy Chintam
-  approved_at: '2026-09-26T10:00:58Z'
-  content_sha256: 2c282597652851d5922c229b44776b1f18159d688decfc36ed8b3b9a2eb1465e
+  approved_at: '2026-09-26T10:26:20Z'
+  content_sha256: 92aa7a95d5bf4d372813fe879394d3069dd5ec02ed8480299c05edad7525aec2

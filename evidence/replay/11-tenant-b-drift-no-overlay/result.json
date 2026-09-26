@@ -1,0 +1,78 @@
+{
+  "run_id": "20260926T231158Z-replay-a83934",
+  "mode": "replay",
+  "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+  "tenant": "lakeside",
+  "effective_plan_sha256": "a4bb0e75f7543c16df0d4fd85a75b59694b1b71c5145680bc0729ea95cf5522b",
+  "overlays_applied": [],
+  "status": "failed",
+  "outputs": null,
+  "outcome": null,
+  "error": {
+    "code": "TARGET_NOT_FOUND",
+    "message": "no strategy found the control for step click_member_inquiry (Open Member Inquiry to look up the member) in frame:nav",
+    "step_id": "click_member_inquiry",
+    "step_intent": "Open Member Inquiry to look up the member",
+    "expected": "role_name {'role': 'link', 'name': 'Member Inquiry'} OR attr {'tag': 'a', 'attrs': {'href': '/core/inquiry'}}",
+    "observed": "role_name {'role': 'link', 'name': 'Member Inquiry'} -> 0 matches; attr {'tag': 'a', 'attrs': {'href': '/core/inquiry'}} -> 0 matches",
+    "transient": false,
+    "reason": null,
+    "hint": "the page loaded but the control is missing: likely UI drift (renamed/moved). Nearest candidates: link \"Member Lookup\" (similarity 0.50), link \"GL Inquiry\" (similarity 0.33). Re-target step 'click_member_inquiry' in a version overlay.",
+    "near_misses": [
+      "link \"Member Lookup\" (similarity 0.50)",
+      "link \"GL Inquiry\" (similarity 0.33)"
+    ],
+    "evidence": [
+      "screenshots/001-failure-click_member_inquiry.png",
+      "snapshots/failure-click_member_inquiry.txt"
+    ]
+  },
+  "side_effect": "none",
+  "retry_safe": true,
+  "recoveries": [],
+  "warnings": [],
+  "interventions": [],
+  "parked": null,
+  "steps": [
+    {
+      "step_id": "click_member_inquiry",
+      "status": "failed",
+      "strategy": null,
+      "attempts": 1,
+      "duration_ms": 10131
+    },
+    {
+      "step_id": "fill_member_number",
+      "status": "not_run",
+      "strategy": null,
+      "attempts": 0,
+      "duration_ms": 0
+    },
+    {
+      "step_id": "click_search",
+      "status": "not_run",
+      "strategy": null,
+      "attempts": 0,
+      "duration_ms": 0
+    },
+    {
+      "step_id": "extract_savings_balance",
+      "status": "not_run",
+      "strategy": null,
+      "attempts": 0,
+      "duration_ms": 0
+    },
+    {
+      "step_id": "extract_shares",
+      "status": "not_run",
+      "strategy": null,
+      "attempts": 0,
+      "duration_ms": 0
+    }
+  ],
+  "started_at": "2026-09-26T23:11:58.921Z",
+  "finished_at": "2026-09-26T23:12:10.605Z",
+  "duration_ms": 11683,
+  "evidence_dir": "runs/_evidence_tmp/20260926T231158Z-replay-a83934",
+  "path_sha256": "295b1edf9e9eb8210fe85800dccfd9f5817b77c620b796e792120bc218224876"
+}

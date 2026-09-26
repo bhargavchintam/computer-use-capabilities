@@ -1,0 +1,18 @@
+== top (frameset) /core/main
+== frame:banner /core/banner
+  [e1] **Pinecrest Community CU (demo)**
+  AcmeCore 7.2.4 | Operator: <secret:operator_id> | 09/26/2026 |
+  [e2] link "Sign Off"
+== frame:nav /core/nav
+  [e3] **Menu**
+  [e4] link "Member Inquiry"
+  [e5] link "Teller Drawer"
+  [e6] link "Reports"
+  [e7] link "GL Inquiry"
+== frame:work /core/inquiry
+  [e8] !! Server Error in '/AcmeCore' Application.
+  [e9] **Runtime Error**
+  [e10] **Description:**
+  [e11] **An application error occurred on the server. The current custom error settings for this application prevent the details of the application error from being viewed remotely.**
+  [e12] **Request ID:**
+  [e13] **f0171ac852e50f72**

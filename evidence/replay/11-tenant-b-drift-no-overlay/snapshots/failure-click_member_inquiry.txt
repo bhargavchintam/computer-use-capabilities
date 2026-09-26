@@ -1,0 +1,15 @@
+== top (frameset) /core/main
+== frame:banner /core/banner
+  [e1] **Lakeside Savings Bank (demo)**
+  AcmeCore 7.3.1 | Operator: <secret:operator_id> | 09/26/2026 |
+  [e2] link "Sign Off"
+== frame:nav /core/nav
+  [e3] **Menu**
+  [e4] link "Member Lookup"
+  [e5] link "Teller Drawer"
+  [e6] link "Reports"
+  [e7] link "GL Inquiry"
+== frame:work /core/welcome
+  [e8] **Welcome**
+  Signed on as <secret:operator_id>. Select a function from the menu.
+  Notice: all activity is logged. Unauthorized access is prohibited.

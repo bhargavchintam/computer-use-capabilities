@@ -64,6 +64,7 @@ class InterventionRequest(BaseModel):
     goal: str | None = None
     step_id: str | None = None
     step_intent: str | None = None
+    done_when: str | None = None  # the checkpoint that means the step is complete: hand back then
     proposed_action: str | None = None
     screenshot: str | None = None
     snapshot_excerpt: str | None = None
@@ -124,6 +125,9 @@ class SessionController:
         self._captured: list[dict[str, Any]] = []
         self._pending_capture: tuple[dict[str, Any], list[str]] | None = None
         self.pending_dialog: PendingDialog | None = None
+        # Set by the engine while a person holds the session: a read-only check of whether the
+        # step they are resolving now looks done, so the console can say "hand back now".
+        self.step_done_probe: Callable[[], Awaitable[bool]] | None = None
         self.dialog_timeout_s = 120.0
         # Hooks: the surface brings the window forward; operator surfaces get notified.
         self.on_take_control: Callable[[], Awaitable[None]] | None = None
@@ -191,6 +195,7 @@ class SessionController:
         goal: str | None = None,
         step_id: str | None = None,
         step_intent: str | None = None,
+        done_when: str | None = None,
         proposed_action: str | None = None,
         screenshot: str | None = None,
         snapshot_excerpt: str | None = None,
@@ -203,6 +208,7 @@ class SessionController:
             goal=goal,
             step_id=step_id,
             step_intent=step_intent,
+            done_when=done_when,
             proposed_action=proposed_action,
             screenshot=screenshot,
             snapshot_excerpt=snapshot_excerpt,

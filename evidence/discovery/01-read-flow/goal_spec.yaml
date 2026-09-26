@@ -1,0 +1,31 @@
+capability_id: member.get_savings_balance_and_shares
+title: Look Up Member Savings Balance and Share List
+goal: Look up member {{member_number}} and read their current savings balance and their list of shares
+inputs:
+  member_number:
+    type: string
+    description: The member number used to look up the member record in AcmeCore
+    pattern: ^[0-9]{5}$
+    enum: null
+    max_value: null
+    sensitivity: pii_identifier
+    required: true
+outputs:
+  savings_balance:
+    type: money
+    description: Current savings balance for the member
+    currency: USD
+    columns: null
+    sensitivity: confidential
+  shares:
+    type: table
+    description: List of share accounts held by the member
+    currency: null
+    columns:
+      share_id: identifier
+      share_type: string
+      description: string
+      balance: money
+    sensitivity: confidential
+sample_inputs:
+  member_number: <member_number:…42>

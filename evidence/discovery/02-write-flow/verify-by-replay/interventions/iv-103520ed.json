@@ -1,0 +1,27 @@
+{
+  "id": "iv-103520ed",
+  "run_id": "20260926T102530Z-replay-e966cc",
+  "kind": "approval",
+  "reason": "step click_confirm is a commit (Confirm to open the new share as requested); it needs an explicit approval",
+  "capability": "acmecore.share.open_share_account@1.0.0",
+  "goal": null,
+  "step_id": "click_confirm",
+  "step_intent": "Confirm to open the new share as requested",
+  "proposed_action": "click button \"Confirm\" on the verified review page",
+  "screenshot": "screenshots/001-escalation-click_confirm.png",
+  "snapshot_excerpt": "== top (frameset) /core/main\n== frame:banner /core/banner\n  [e1] **Pinecrest Community CU (demo)**\n  AcmeCore 7.2.4 | Operator: <secret:operator_id> | 09/26/2026 |\n  [e2] link \"Sign Off\"\n== frame:nav /core/nav\n  [e3] **Menu**\n  [e4] link \"Member Inquiry\"\n  [e5] link \"Teller Drawer\"\n  [e6] link \"Reports\"\n  [e7] link \"GL Inquiry\"\n== frame:work /core/member/<member_number:…77>/newshare\n  [e8] **Review New Share**\n  Please review the details below and select Confirm to open the share.\n  [e14] fields:\n      Member #: [e9] <member_number:…77>\n      Share Type: [e10] Holiday Club\n      Initial Deposit: [e11] $<initial_deposit>\n      Funding Source: [e12] S01 PRIMARY SAVINGS\n      Nickname: [e13] Verify run\n  [e15] button \"Confirm\"\n  [e16] button \"Cancel\"",
+  "allowed_decisions": [
+    "approve",
+    "reject",
+    "take_control",
+    "abort"
+  ],
+  "requested_at": "2026-09-26T10:25:37.923Z",
+  "deadline": "2026-09-26T10:40:37Z",
+  "status": "resolved",
+  "decision": "approve",
+  "operator": "operator",
+  "note": null,
+  "resolved_at": "2026-09-26T10:25:47.109Z",
+  "human_actions": []
+}

@@ -1,0 +1,19 @@
+== top (frameset) /core/main
+== frame:banner /core/banner
+  [e1] **Pinecrest Community CU (demo)**
+  AcmeCore 7.2.4 | Operator: <secret:operator_id> | 09/26/2026 |
+  [e2] link "Sign Off"
+== frame:nav /core/nav
+  [e3] **Menu**
+  [e4] link "Member Inquiry"
+  [e5] link "Teller Drawer"
+  [e6] link "Reports"
+  [e7] link "GL Inquiry"
+== frame:work /core/inquiry
+  [e8] **Member Inquiry**
+  Member #:
+  [e9] textbox label="Member #:" value="{{member_number}}"
+  Last Name:
+  [e10] textbox label="Last Name:" value=""
+  [e11] button "Search"
+  [e12] button "Clear"

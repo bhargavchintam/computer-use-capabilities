@@ -1,0 +1,27 @@
+== top (frameset) /core/main
+== frame:banner /core/banner
+  [e1] **Pinecrest Community CU (demo)**
+  AcmeCore 7.2.4 | Operator: <secret:operator_id> | 09/26/2026 |
+  [e2] link "Sign Off"
+== frame:nav /core/nav
+  [e3] **Menu**
+  [e4] link "Member Inquiry"
+  [e5] link "Teller Drawer"
+  [e6] link "Reports"
+  [e7] link "GL Inquiry"
+== frame:work /core/inquiry
+  [e8] **Member Summary**
+  [e15] fields:
+      Member #: [e9] {{member_number}}
+      SSN: [e10] <pii:ssn>
+      Name: [e11] <pii:name>
+      Date of Birth: [e12] <pii:date_of_birth>
+      Address: [e13] <pii:address>
+      Phone: [e14] <pii:phone>
+  [e16] **Shares**
+  [e32] table (3 rows): Share ID | Description | Balance | Available | Status
+      [e17] S01 | [e18] PRIMARY SAVINGS | [e19] $##,###.## | [e20] $##,###.## | [e21] Active
+      [e22] S10 | [e23] SHARE DRAFT CHECKING | [e24] $#,###.## | [e25] $#,###.## | [e26] Active
+      [e27] S50 | [e28] {{share_product}} | [e29] $###.## | [e30] $###.## | [e31] Active
+  [e33] link "Open New Share"
+  [e34] link "New Search"

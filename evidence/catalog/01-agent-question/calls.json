@@ -1,0 +1,8 @@
+[
+  {
+    "tool": "acmecore__member__get_savings_balance_and_shares",
+    "capability": "acmecore.member.get_savings_balance_and_shares@1.0.0",
+    "replay_run": "20260926T231351Z-replay-66ec14",
+    "status": "succeeded"
+  }
+]

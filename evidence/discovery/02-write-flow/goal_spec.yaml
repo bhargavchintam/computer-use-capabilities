@@ -1,0 +1,60 @@
+capability_id: share.open_share_account
+title: Open New Share Account for Member
+goal: Open a new {{share_product}} share for member {{member_number}} with an initial deposit of {{initial_deposit}}
+  and the nickname {{nickname}}, and return the confirmation number and the new share ID
+inputs:
+  member_number:
+    type: string
+    description: Member number of the account holder for whom the share is opened
+    pattern: ^[0-9]{5}$
+    enum: null
+    max_value: null
+    sensitivity: pii_identifier
+    required: true
+  share_product:
+    type: enum
+    description: Share product type to open
+    pattern: null
+    enum:
+    - Holiday Club
+    - Regular Share
+    - Vacation Club
+    - Christmas Club
+    - Money Market Share
+    max_value: null
+    sensitivity: internal
+    required: true
+  initial_deposit:
+    type: money
+    description: Initial deposit amount funding the new share
+    pattern: null
+    enum: null
+    max_value: null
+    sensitivity: confidential
+    required: true
+  nickname:
+    type: string
+    description: Member-facing nickname/label for the new share
+    pattern: null
+    enum: null
+    max_value: null
+    sensitivity: internal
+    required: true
+outputs:
+  confirmation_number:
+    type: identifier
+    description: Confirmation number returned by the core for the share opening transaction
+    currency: null
+    columns: null
+    sensitivity: internal
+  share_id:
+    type: identifier
+    description: Identifier of the newly opened share account
+    currency: null
+    columns: null
+    sensitivity: pii_identifier
+sample_inputs:
+  member_number: <member_number:…42>
+  share_product: Holiday Club
+  initial_deposit: <initial_deposit>
+  nickname: Gift fund

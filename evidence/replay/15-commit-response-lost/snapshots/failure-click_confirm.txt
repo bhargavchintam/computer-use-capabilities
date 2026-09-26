@@ -1,0 +1,22 @@
+== top (frameset) /core/main
+== frame:banner /core/banner
+  [e1] **Pinecrest Community CU (demo)**
+  AcmeCore 7.2.4 | Operator: <secret:operator_id> | 09/26/2026 |
+  [e2] link "Sign Off"
+== frame:nav /core/nav
+  [e3] **Menu**
+  [e4] link "Member Inquiry"
+  [e5] link "Teller Drawer"
+  [e6] link "Reports"
+  [e7] link "GL Inquiry"
+== frame:work /core/member/<member_number:…42>/newshare
+  [e8] **Review New Share**
+  Please review the details below and select Confirm to open the share.
+  [e14] fields:
+      Member #: [e9] <member_number:…42>
+      Share Type: [e10] Holiday Club
+      Initial Deposit: [e11] $<initial_deposit>
+      Funding Source: [e12] S01 PRIMARY SAVINGS
+      Nickname: [e13] Gift fund
+  [e15] button "Confirm"
+  [e16] button "Cancel"

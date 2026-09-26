@@ -1,0 +1,23 @@
+== top (frameset) /core/main
+== frame:banner /core/banner
+  [e1] **Pinecrest Community CU (demo)**
+  AcmeCore 7.2.4 | Operator: <secret:operator_id> | 09/26/2026 |
+  [e2] link "Sign Off"
+== frame:nav /core/nav
+  [e3] **Menu**
+  [e4] link "Member Inquiry"
+  [e5] link "Teller Drawer"
+  [e6] link "Reports"
+  [e7] link "GL Inquiry"
+== frame:work /core/member/<member_number:…42>/newshare
+  [e8] **Open New Share**
+  Member # {{member_number}}
+  Share Type:
+  [e9] combobox label="Share Type:" value="{{share_product}}" options=[-- Select --, {{share_product}}, Vacation Club, 12 Month Certificate]
+  Initial Deposit:
+  [e10] textbox label="Initial Deposit:" value=""
+  (from S01 PRIMARY SAVINGS)
+  Nickname:
+  [e11] textbox label="Nickname:" value=""
+  [e12] button "Continue"
+  [e13] button "Cancel"

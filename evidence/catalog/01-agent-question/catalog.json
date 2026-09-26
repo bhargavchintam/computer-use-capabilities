@@ -1,0 +1,57 @@
+[
+  {
+    "name": "acmecore__member__get_savings_balance_and_shares",
+    "description": "Look Up Member Savings Balance and Share List. Read-only and safe to retry. Returns: savings_balance (money), shares (table). Business outcomes: MEMBER_NOT_FOUND: No member exists with this member number. Guidance: Ask the user to double-check the member number. Safe to retry with a corrected number. INPUT_REJECTED_BY_APP: The application rejected the member number format. Guidance: Correct the member number (digits only) and retry. ACCOUNT_RESTRICTED: The member record is restricted (e.g. an employee account) for this operator. Guidance: Retrying will not help; route the request to staff with supervisor access. OUTPUT_NOT_PRESENT: The record has no entry for a requested value (no row with the recorded key). Guidance: Tell the user the record has no such entry. This is an answer, not an error.",
+    "strict": true,
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "member_number": {
+          "type": "string",
+          "description": "The member number used to look up the member record in AcmeCore Format: ^[0-9]{5}$."
+        }
+      },
+      "required": [
+        "member_number"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "acmecore__share__open_share_account",
+    "description": "Open New Share Account for Member. It COMMITS a change and needs a human approval. Returns: confirmation_number (identifier), share_id (identifier). Business outcomes: MEMBER_NOT_FOUND: No member exists with this member number. Guidance: Ask the user to double-check the member number. Safe to retry with a corrected number. INPUT_REJECTED_BY_APP: The application rejected the member number format. Guidance: Correct the member number (digits only) and retry. ACCOUNT_RESTRICTED: The member record is restricted (e.g. an employee account) for this operator. Guidance: Retrying will not help; route the request to staff with supervisor access. INSUFFICIENT_FUNDS: The funding share does not have enough available balance. Guidance: Tell the user the available balance is too low; retry with a smaller amount. INVALID_AMOUNT: The application rejected the deposit amount. Guidance: Correct the amount (positive, at most two decimals) and retry. INVALID_NICKNAME: The nickname contains characters the application does not accept. Guidance: Use letters, numbers and spaces only (max 20) and retry. REQUEST_ALREADY_PROCESSED: The application refused a repeated submission. Guidance: Do not retry. Check the member's shares first; the earlier submission may have succeeded. APPROVAL_DENIED: A human operator declined the commit step; nothing was committed. Guidance: Tell the user staff declined the request. Do not retry without new instructions.",
+    "strict": true,
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "member_number": {
+          "type": "string",
+          "description": "Member number of the account holder for whom the share is opened Format: ^[0-9]{5}$."
+        },
+        "share_product": {
+          "type": "string",
+          "description": "Share product type to open",
+          "enum": [
+            "Holiday Club",
+            "Vacation Club"
+          ]
+        },
+        "initial_deposit": {
+          "type": "string",
+          "description": "Initial deposit amount funding the new share"
+        },
+        "nickname": {
+          "type": "string",
+          "description": "Member-facing nickname/label for the new share"
+        }
+      },
+      "required": [
+        "member_number",
+        "share_product",
+        "initial_deposit",
+        "nickname"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

@@ -1,0 +1,872 @@
+[
+  {
+    "index": 0,
+    "actor": "agent",
+    "action": "click",
+    "container": [
+      "frame:nav"
+    ],
+    "target": {
+      "role": "link",
+      "name": "Member Inquiry",
+      "label": "",
+      "tag": "a"
+    },
+    "strategies": [
+      {
+        "kind": "role_name",
+        "role": "link",
+        "name": "Member Inquiry"
+      },
+      {
+        "kind": "attr",
+        "tag": "a",
+        "attrs": {
+          "href": "/core/inquiry"
+        }
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": null,
+    "reason": "Open Member Inquiry to find the member and share options",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/welcome",
+        "Welcome"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Inquiry"
+      ]
+    ]
+  },
+  {
+    "index": 1,
+    "actor": "agent",
+    "action": "fill",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "textbox",
+      "name": "",
+      "label": "Member #:",
+      "tag": "input"
+    },
+    "strategies": [
+      {
+        "kind": "label",
+        "role": "textbox",
+        "label": "Member #:"
+      },
+      {
+        "kind": "attr",
+        "tag": "input",
+        "attrs": {
+          "name": "txtMbr"
+        }
+      }
+    ],
+    "effect": "input",
+    "value": "{{member_number}}",
+    "key": null,
+    "output": null,
+    "reason": "Enter member number to search",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Inquiry"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Inquiry"
+      ]
+    ]
+  },
+  {
+    "index": 2,
+    "actor": "agent",
+    "action": "click",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "button",
+      "name": "Search",
+      "label": "",
+      "tag": "input"
+    },
+    "strategies": [
+      {
+        "kind": "role_name",
+        "role": "button",
+        "name": "Search"
+      },
+      {
+        "kind": "attr",
+        "tag": "input",
+        "attrs": {
+          "name": "btnSrch"
+        }
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": null,
+    "reason": "Search for the member",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Inquiry"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Summary"
+      ]
+    ]
+  },
+  {
+    "index": 3,
+    "actor": "agent",
+    "action": "click",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "link",
+      "name": "Open New Share",
+      "label": "",
+      "tag": "a"
+    },
+    "strategies": [
+      {
+        "kind": "role_name",
+        "role": "link",
+        "name": "Open New Share"
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": null,
+    "reason": "Proceed to the Open New Share form",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/inquiry",
+        "Member Summary"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Open New Share"
+      ]
+    ]
+  },
+  {
+    "index": 4,
+    "actor": "agent",
+    "action": "select",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "combobox",
+      "name": "",
+      "label": "Share Type:",
+      "tag": "select"
+    },
+    "strategies": [
+      {
+        "kind": "label",
+        "role": "combobox",
+        "label": "Share Type:"
+      },
+      {
+        "kind": "attr",
+        "tag": "select",
+        "attrs": {
+          "name": "ddlType"
+        }
+      }
+    ],
+    "effect": "input",
+    "value": "{{share_product}}",
+    "key": null,
+    "output": null,
+    "reason": "Select requested share product",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Open New Share"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Open New Share"
+      ]
+    ]
+  },
+  {
+    "index": 5,
+    "actor": "agent",
+    "action": "fill",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "textbox",
+      "name": "",
+      "label": "Initial Deposit:",
+      "tag": "input"
+    },
+    "strategies": [
+      {
+        "kind": "label",
+        "role": "textbox",
+        "label": "Initial Deposit:"
+      },
+      {
+        "kind": "attr",
+        "tag": "input",
+        "attrs": {
+          "name": "txtAmt"
+        }
+      }
+    ],
+    "effect": "input",
+    "value": "{{initial_deposit}}",
+    "key": null,
+    "output": null,
+    "reason": "Enter the initial deposit amount",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Open New Share"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Open New Share"
+      ]
+    ]
+  },
+  {
+    "index": 6,
+    "actor": "agent",
+    "action": "fill",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "textbox",
+      "name": "",
+      "label": "Nickname:",
+      "tag": "input"
+    },
+    "strategies": [
+      {
+        "kind": "label",
+        "role": "textbox",
+        "label": "Nickname:"
+      },
+      {
+        "kind": "attr",
+        "tag": "input",
+        "attrs": {
+          "name": "txtNick"
+        }
+      }
+    ],
+    "effect": "input",
+    "value": "{{nickname}}",
+    "key": null,
+    "output": null,
+    "reason": "Enter the member-facing nickname",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Open New Share"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Open New Share"
+      ]
+    ]
+  },
+  {
+    "index": 7,
+    "actor": "agent",
+    "action": "click",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "button",
+      "name": "Continue",
+      "label": "",
+      "tag": "input"
+    },
+    "strategies": [
+      {
+        "kind": "role_name",
+        "role": "button",
+        "name": "Continue"
+      },
+      {
+        "kind": "attr",
+        "tag": "input",
+        "attrs": {
+          "name": "btnCont"
+        }
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": null,
+    "reason": "Continue to the confirmation step",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Open New Share"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Review New Share"
+      ]
+    ]
+  },
+  {
+    "index": 8,
+    "actor": "agent",
+    "action": "click",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "button",
+      "name": "Confirm",
+      "label": "",
+      "tag": "input"
+    },
+    "strategies": [
+      {
+        "kind": "role_name",
+        "role": "button",
+        "name": "Confirm"
+      },
+      {
+        "kind": "attr",
+        "tag": "input",
+        "attrs": {
+          "name": "btnConfirm"
+        }
+      }
+    ],
+    "effect": "commit",
+    "value": null,
+    "key": null,
+    "output": null,
+    "reason": "Confirm to open the new share as requested",
+    "approved_by": "operator",
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare",
+        "Review New Share"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare/confirm",
+        "Share Opened"
+      ]
+    ]
+  },
+  {
+    "index": 9,
+    "actor": "agent",
+    "action": "extract",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "cell",
+      "name": "CNYPZQ5D4D",
+      "label": "Confirmation #:",
+      "tag": "td"
+    },
+    "strategies": [
+      {
+        "kind": "label",
+        "role": "cell",
+        "label": "Confirmation #:"
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": "confirmation_number",
+    "reason": "Bind the confirmation number from the success screen",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare/confirm",
+        "Share Opened"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare/confirm",
+        "Share Opened"
+      ]
+    ]
+  },
+  {
+    "index": 10,
+    "actor": "agent",
+    "action": "extract",
+    "container": [
+      "frame:work"
+    ],
+    "target": {
+      "role": "cell",
+      "name": "S51",
+      "label": "New Share ID:",
+      "tag": "td"
+    },
+    "strategies": [
+      {
+        "kind": "label",
+        "role": "cell",
+        "label": "New Share ID:"
+      }
+    ],
+    "effect": "read",
+    "value": null,
+    "key": null,
+    "output": "share_id",
+    "reason": "Bind the new share ID from the success screen",
+    "approved_by": null,
+    "superseded": false,
+    "before": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare/confirm",
+        "Share Opened"
+      ]
+    ],
+    "after": [
+      [
+        [
+          "frame:banner"
+        ],
+        "/core/banner",
+        "Pinecrest Community CU (demo)"
+      ],
+      [
+        [
+          "frame:nav"
+        ],
+        "/core/nav",
+        "Menu"
+      ],
+      [
+        [
+          "frame:work"
+        ],
+        "/core/member/<member_number:…42>/newshare/confirm",
+        "Share Opened"
+      ]
+    ]
+  }
+]

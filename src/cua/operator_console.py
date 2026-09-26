@@ -65,6 +65,9 @@ class OperatorConsole:
         async def state() -> JSONResponse:
             reqs = sorted(c.requests.values(), key=lambda r: r.requested_at, reverse=True)
             live = [a.model_dump(mode="json") for a in c._human_actions] if c.state.value == "human" else []
+            step_done = None
+            if c.state.value == "human" and c.step_done_probe is not None:
+                step_done = await c.step_done_probe()  # read-only look at the live page
             return JSONResponse(
                 {
                     "run_id": self.recorder.run_id,
@@ -72,6 +75,7 @@ class OperatorConsole:
                     "interventions": [r.model_dump(mode="json") for r in reqs],
                     "live_human_actions": live,
                     "pending_dialog": c.pending_dialog.view() if c.pending_dialog else None,
+                    "step_done": step_done,
                 }
             )
 
@@ -174,6 +178,7 @@ function buttons(iv, control) {
     if (can("take_control")) b.push(`<button onclick="decide('${iv.id}','take_control')">Take control of the live session</button>`);
     if (can("abort")) b.push(`<button class="danger" onclick="decide('${iv.id}','abort')">Abort run</button>`);
   } else if (iv.status === "active") {
+    if (iv.done_when) b.push(`<p><b>You hold the live session.</b> Finish the step in the bank window, and while it shows the result (${esc(iv.done_when)}) come back here and hand control back. Do not navigate away from that page first.</p>`);
     b.push(`<textarea id="note-${iv.id}" placeholder="What did you do? (recorded with the run)"></textarea>`);
     b.push(`<button class="primary" onclick="decide('${iv.id}','hand_back')">Hand control back to automation</button>`);
     b.push(`<button class="danger" onclick="decide('${iv.id}','abort')">Abort run</button>`);
@@ -200,6 +205,7 @@ function card(iv, control, live) {
     <h3 style="margin:8px 0 4px">${esc(iv.reason)}</h3>
     <dl><dt>Capability</dt><dd>${esc(iv.capability || iv.goal || "")}</dd><dt>Step</dt><dd>${esc(iv.step_id || "")} ${iv.step_intent ? "— " + esc(iv.step_intent) : ""}</dd>
     ${iv.proposed_action ? `<dt>Proposed</dt><dd>${esc(iv.proposed_action)}</dd>` : ""}
+    ${iv.done_when ? `<dt>Done when</dt><dd>${esc(iv.done_when)}</dd>` : ""}
     <dt>Requested</dt><dd>${esc(iv.requested_at)} (deadline ${esc(iv.deadline)})</dd>
     ${iv.decision ? `<dt>Decision</dt><dd>${esc(iv.decision)} by ${esc(iv.operator)}${iv.note ? ": " + esc(iv.note) : ""}</dd>` : ""}</dl>
     ${buttons(iv, control)}
@@ -213,7 +219,8 @@ async function refresh() {
     const s = await (await fetch("/api/state")).json();
     $("#run").textContent = "Run " + s.run_id;
     $("#dot").className = "dot " + s.control.state;
-    $("#lease").textContent = `${s.control.state.replace("_", " ")} · holder: ${s.control.holder} · epoch ${s.control.epoch}`;
+    $("#lease").textContent = `${s.control.state.replace("_", " ")} · holder: ${s.control.holder} · epoch ${s.control.epoch}` +
+      (s.step_done ? " · STEP COMPLETE: hand control back now" : "");
     const key = JSON.stringify([s.control, s.interventions.map(i => [i.id, i.status]), s.live_human_actions.length,
       s.pending_dialog && s.pending_dialog.id]);
     if (key !== last) {

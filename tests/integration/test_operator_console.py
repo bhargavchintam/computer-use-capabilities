@@ -127,6 +127,8 @@ async def test_console_take_control_and_hand_back_on_the_same_session(
             seen["actions"] = await actions.inner_text()
             seen["page"] = await page.content()
             seen["api"] = await (await page.request.get(f"http://127.0.0.1:{port}/api/state")).text()
+            # the console tells the operator the step is done, so they hand back on the result page
+            await expect(page.locator("#lease")).to_contain_text("STEP COMPLETE")
             await page.get_by_placeholder("What did you do?").fill("Entered the supervisor PIN and approved")
             await page.get_by_role("button", name="Hand control back to automation").click()
             await browser.close()
@@ -153,6 +155,7 @@ async def test_console_take_control_and_hand_back_on_the_same_session(
     assert 'textbox "Supervisor PIN:"' in seen["actions"] and 'button "Approve"' in seen["actions"]
     for where in ("actions", "page", "api"):
         assert pin not in seen[where], f"PIN visible in the console {where}"
+    assert '"step_done": true' in seen["api"].replace("\n", " ") or '"step_done":true' in seen["api"]
     receipts = bank.state("pinecrest")["receipts"]
     assert len(receipts) == 1 and receipts[0]["supervisor"] is True
     for p in Path(r.evidence_dir or "").rglob("*"):
