@@ -5,18 +5,22 @@ The model discovers; the artifact becomes a reusable capability; deterministic r
 ## Architecture
 
 ```mermaid
-flowchart LR
-  G[Goal in plain English] --> GC[Goal compiler: 1 structured call] --> S[Typed goal spec]
-  S --> D[Discovery agent: Claude, one action per turn]
-  D --> T[Grounded trace] --> C[Compiler + fail-closed linter] --> V[Verify by replay on a 2nd record] --> R[(Registry: draft to approved)]
-  R --> X[Replay engine: no model] 
-  R --> K[Catalog: typed tools] --> X
+flowchart TB
+  subgraph DISC["Discovery: once per task, with the model"]
+    direction LR
+    G[Goal in plain English] --> GC[Goal compiler] --> D[Agent loop: Claude] --> C[Compiler + linter] --> V[Verify by replay on a 2nd record] --> R[(Registry: draft to approved)]
+  end
+  subgraph PROD["Production: every call, no model"]
+    direction LR
+    K[Catalog: typed tools] --> X[Replay engine] --> OUT[Typed result + side effect]
+  end
+  subgraph RT["Shared runtime: one live session"]
+    direction LR
+    P[Policy] --- L[Control lease] --- RG[Runtime guard] --- EV[Redacted evidence] --- W[Surface: snapshot / resolve / act]
+  end
+  R --> X
   D --- RT
   X --- RT
-  subgraph RT[Shared runtime: one live session]
-    P[Policy] --- L[Control lease] --- RG[Runtime guard] --- E[Redacted evidence]
-    W[Surface: snapshot / resolve / act]
-  end
   RT <--> O[Operator console]
 ```
 
