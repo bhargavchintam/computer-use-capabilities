@@ -1,5 +1,7 @@
 # computer-use-capabilities
 
+*Bindu Bhargava Reddy Chintam: take-home for interface.ai, Assignment A (Computer-Use Automation System).*
+
 Give an AI agent hands in legacy bank software that has no API.
 
 1. **Discover.** An LLM (Claude Opus 5) works out how to do a task in a live UI, one grounded action at a time.

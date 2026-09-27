@@ -3,8 +3,8 @@ name = "computer-use-capabilities"
 version = "0.1.0"
 description = "An LLM discovers a UI flow once; the run becomes a typed capability that replays deterministically with no model in the loop."
 readme = "README.md"
+authors = [{ name = "Bindu Bhargava Reddy Chintam" }]
 requires-python = ">=3.12"
-license = { text = "MIT" }
 dependencies = [
     "anthropic>=1.8.0",
     "fastapi>=0.141.1",

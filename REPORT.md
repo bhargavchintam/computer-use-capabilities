@@ -1,5 +1,7 @@
 # Design report: computer-use capabilities
 
+*Bindu Bhargava Reddy Chintam*
+
 The model discovers; the artifact becomes a reusable capability; deterministic replay is how an agent invokes it. Everything below is built and tested (139 tests) unless it says *design only*. Evidence: [`evidence/`](evidence/README.md).
 
 ## Architecture
