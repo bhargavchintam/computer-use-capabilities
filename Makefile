@@ -12,8 +12,10 @@ mock:           ## start both mock tenants in the background (:8401 pinecrest 7.
 	@sleep 2 && curl -sf -o /dev/null http://127.0.0.1:8401/signon && curl -sf -o /dev/null http://127.0.0.1:8402/signon \
 		&& echo "mock bank up: http://127.0.0.1:8401 (pinecrest) http://127.0.0.1:8402 (lakeside)"
 
-mock-stop:
-	@test -f .mock_pids && (xargs kill < .mock_pids; rm .mock_pids) || pkill -f "mock_bank --tenant" || true
+mock-stop:       ## stop both mock tenants (the `uv run` wrappers and the servers they started)
+	@-test -f .mock_pids && xargs kill < .mock_pids 2>/dev/null
+	@-pkill -f "mock_bank --tenant" 2>/dev/null
+	@rm -f .mock_pids
 
 test:           ## unit + integration tests (starts its own mock servers; no API key needed)
 	uv run pytest -q

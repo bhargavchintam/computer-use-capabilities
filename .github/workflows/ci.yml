@@ -30,3 +30,6 @@ jobs:
           make mock
           uv run python scripts/generate_evidence.py --out "$RUNNER_TEMP/evidence"
           uv run python scripts/audit_evidence.py "$RUNNER_TEMP/evidence"
+      - name: Stop the mock servers (they hold uv's cache lock otherwise)
+        if: always()
+        run: make mock-stop
