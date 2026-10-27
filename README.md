@@ -30,6 +30,43 @@ The target is **AcmeCore**, a fictional core-banking app with synthetic data, se
 
 Design and trade-offs: **[REPORT.md](REPORT.md)**. What each run proves: **[evidence/README.md](evidence/README.md)**.
 
+```mermaid
+flowchart TB
+  subgraph DISC["Discovery: once per task, with the model"]
+    direction LR
+    G[Goal in plain English] --> GC[Goal compiler] --> D[Agent loop: Claude] --> C[Compiler + linter] --> V[Verify by replay on a 2nd record] --> R[(Registry: draft to approved)]
+  end
+  subgraph PROD["Production: every call, no model"]
+    direction LR
+    K[Catalog: typed tools] --> X[Replay engine] --> OUT[Typed result + side effect]
+  end
+  subgraph RT["Shared runtime: one live session"]
+    direction LR
+    P[Policy] --- L[Control lease] --- RG[Runtime guard] --- EV[Redacted evidence] --- W[Surface: snapshot / resolve / act]
+  end
+  R --> X
+  D --- RT
+  X --- RT
+  RT <--> O[Operator console]
+```
+
+<sub>Architecture (from [REPORT.md](REPORT.md#architecture)): the model runs only in discovery; every production call is a replay, and both use the same runtime.</sub>
+
+## Results
+
+Every number below is stated in [REPORT.md](REPORT.md) or [evidence/README.md](evidence/README.md).
+
+| What | Result | Evidence |
+|---|---|---|
+| Tests (unit + real-browser integration) | 139 | [REPORT.md](REPORT.md) |
+| Replay scenarios, each run twice from a freshly reset bank | 15, with identical results and step paths on both runs | [evidence/replay/SUMMARY.md](evidence/replay/SUMMARY.md) |
+| Discovery with Claude Opus 5, read flow | 7 model turns, compiled to a 5-step capability, verified by replay on a different member | [evidence/discovery/01-read-flow](evidence/discovery/01-read-flow/) |
+| Discovery, write flow | 12 model turns, compiled to an 11-step capability; a person approved the commit in the operator console, and the verification run got its own approval | [evidence/discovery/02-write-flow](evidence/discovery/02-write-flow/) |
+| Prompt cache during discovery | read flow: about 51k tokens read from cache, 11k written; write flow: about 372k read, 56k written | [evidence/README.md](evidence/README.md#1-discovery-with-a-real-model-claude-opus-5) |
+| A person taking over the live session | 3 handoff runs | [evidence/handoff](evidence/handoff/) |
+| An agent calling a capability by name | 1 run; the call was a replay, with no model in the execution path | [evidence/catalog/01-agent-question](evidence/catalog/01-agent-question/) |
+| Accessible names checked against Playwright's `get_by_role` | agree on 50 elements per tenant | [REPORT.md](REPORT.md#architecture) |
+
 ## Quick start (no API key needed)
 
 ```bash
