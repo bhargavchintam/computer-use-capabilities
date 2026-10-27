@@ -4,6 +4,11 @@
 
 Give an AI agent hands in legacy bank software that has no API.
 
+<p align="center">
+  <img src="docs/media/replay.gif" alt="A compiled capability replays with no model in the loop: it signs on to the AcmeCore mock, opens Member Inquiry, enters member 10042 and reads the member summary and shares" width="860">
+  <br><sub>A compiled capability replaying in the hostile mock bank, no model in the loop (headless run, slowed to half speed)</sub>
+</p>
+
 1. **Discover.** An LLM (Claude Opus 5) works out how to do a task in a live UI, one grounded action at a time.
 2. **Compile.** The successful run becomes a typed, versioned, reviewable **capability**:
    - a contract: typed inputs, typed outputs, declared business outcomes;
